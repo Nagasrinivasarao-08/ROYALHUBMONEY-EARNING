@@ -16,7 +16,7 @@ router.post('/register', async (req, res) => {
     let referrerId = null;
     if (referralCode) {
         const referrer = await User.findOne({ referralCode });
-        if (!referrer) return res.status(400).json("Invalid Referral Code");
+        if (!referrer) return res.status(400).json({ message: "Invalid Referral Code" });
         referrerId = referralCode;
     }
 
@@ -29,9 +29,13 @@ router.post('/register', async (req, res) => {
     });
 
     const savedUser = await newUser.save();
-    res.status(201).json(savedUser);
+    
+    // Return with id field
+    const { password: _, ...others } = savedUser._doc;
+    res.status(201).json({ ...others, id: savedUser._id.toString() });
   } catch (err) {
-    res.status(500).json(err);
+    console.error("Register Error:", err);
+    res.status(500).json({ message: "Registration failed", error: err.message });
   }
 });
 
@@ -39,16 +43,18 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const user = await User.findOne({ email: req.body.email });
-    if (!user) return res.status(404).json("User not found");
+    if (!user) return res.status(404).json({ message: "User not found" });
     
     if (user.password !== req.body.password) {
-        return res.status(400).json("Wrong credentials");
+        return res.status(400).json({ message: "Wrong credentials" });
     }
 
     const { password, ...others } = user._doc;
-    res.status(200).json(others);
+    // CRITICAL FIX: Ensure 'id' is sent to frontend
+    res.status(200).json({ ...others, id: user._id.toString() });
   } catch (err) {
-    res.status(500).json(err);
+    console.error("Login Error:", err);
+    res.status(500).json({ message: "Login failed", error: err.message });
   }
 });
 

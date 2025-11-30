@@ -14,16 +14,19 @@ dotenv.config();
 
 const app = express();
 
+// INCREASED LIMIT: Fixes issues where uploading product images or QR codes failed
 app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// CORS Configuration
+// CORS Configuration - Allow all for public access (Vercel -> Render)
 app.use(cors({
     origin: '*', 
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma']
 }));
 
 // MongoDB Connection
+// Use the provided connection string as default if env is missing
 const MONGO_URL = process.env.MONGO_URL || 'mongodb+srv://nagasrinivasaraoeevuri_db_user:Srinivas%409121@cluster0.zpuclhq.mongodb.net/?appName=Cluster0';
 
 mongoose.set('strictQuery', false);
@@ -36,13 +39,20 @@ const seedAdmin = async () => {
             const admin = new User({
                 username: 'Admin',
                 email: adminEmail,
-                password: 'srinivas@9121', // In production, hash this
+                password: 'srinivas@9121', 
                 role: 'admin',
                 referralCode: 'ADMIN',
                 balance: 0
             });
             await admin.save();
             console.log('✅ Default Admin Account Seeded (srinivas@gmail.com)');
+        } else {
+            // Ensure role is admin if it exists
+            if (exists.role !== 'admin') {
+                exists.role = 'admin';
+                await exists.save();
+                console.log('✅ Updated existing admin account permissions');
+            }
         }
     } catch (err) {
         console.error('❌ Admin seeding failed:', err);
@@ -51,16 +61,12 @@ const seedAdmin = async () => {
 
 mongoose.connect(MONGO_URL)
   .then((conn) => {
-      console.log(`MongoDB Connected: ${conn.connection.host}`);
+      console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
       seedAdmin();
   })
   .catch((err) => {
-      console.error("MongoDB Connection Error:", err);
+      console.error("❌ MongoDB Connection Error:", err);
   });
-
-mongoose.connection.on('disconnected', () => {
-    console.log('MongoDB disconnected');
-});
 
 // Routes
 app.use("/api/auth", authRoute);
@@ -70,10 +76,10 @@ app.use("/api/transactions", txRoute);
 app.use("/api/admin", adminRoute);
 
 app.get('/', (req, res) => {
-    res.send("Royal Hub API is running. Status: Healthy.");
+    res.json({ status: "Healthy", time: new Date(), message: "Royal Hub API is running" });
 });
 
-// Global Error Handler for uncaught route errors
+// Global Error Handler
 app.use((err, req, res, next) => {
     console.error("Unhandled Server Error:", err.stack);
     res.status(500).json({ message: "Internal Server Error", error: err.message });
@@ -82,5 +88,5 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`Backend server is running on port ${PORT}`);
+  console.log(`🚀 Backend server is running on port ${PORT}`);
 });

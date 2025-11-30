@@ -127,7 +127,10 @@ function App() {
       try {
           const user = await api.login(email, password);
           
-          if (!user || !user.id) throw new Error("Invalid response from server");
+          if (!user || !user.id) {
+              console.error("Invalid login response:", user);
+              throw new Error("Login failed: Invalid server response");
+          }
 
           // Save session
           localStorage.setItem('royal_user_id', user.id);
@@ -152,7 +155,10 @@ function App() {
       try {
           const user = await api.register(data);
           
-          if (!user || !user.id) throw new Error("Invalid response from server");
+          if (!user || !user.id) {
+              console.error("Invalid register response:", user);
+              throw new Error("Registration failed: Invalid server response");
+          }
 
           // Save session
           localStorage.setItem('royal_user_id', user.id);
@@ -200,6 +206,10 @@ function App() {
 
   const handleRecharge = async (amount: number) => {
     if (!state.currentUser) return;
+    if (!state.currentUser.id) {
+        showToast("User session invalid. Please re-login.", "error");
+        return;
+    }
     try {
         await api.recharge(state.currentUser.id, amount);
         showToast('Recharge submitted! Pending Admin approval.', 'success');

@@ -2,10 +2,6 @@
 import { AppState, Product, User, AppSettings, Transaction } from '../types';
 
 // PRODUCTION SETUP:
-// We automatically detect if running locally or in production.
-// If VITE_API_URL is set in environment variables, it takes priority.
-// Otherwise, we fallback to localhost (dev) or the Render URL (prod).
-
 const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
 const API_URL = (import.meta as any).env?.VITE_API_URL || 
@@ -16,16 +12,24 @@ console.log("API Service Initialized. Target:", API_URL);
 // Helper for Fetch
 const request = async (endpoint: string, options: RequestInit = {}) => {
     try {
-        // Add cache-busting headers to force fresh data
+        // CACHE BUSTING: Add a timestamp to every GET request to prevent the browser 
+        // from showing old data (fixes Admin Dashboard not updating).
+        let url = `${API_URL}${endpoint}`;
+        if (!options.method || options.method === 'GET') {
+            const separator = url.includes('?') ? '&' : '?';
+            url = `${url}${separator}_t=${Date.now()}`;
+        }
+
         const headers = {
             'Content-Type': 'application/json',
+            // Explicitly tell server/browser not to cache
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
             'Expires': '0',
             ...options.headers
         };
 
-        const res = await fetch(`${API_URL}${endpoint}`, {
+        const res = await fetch(url, {
             ...options,
             headers
         });
@@ -42,11 +46,10 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
         }
         return res.json();
     } catch (error: any) {
-        console.error(`API Error at ${API_URL}${endpoint}:`, error);
+        console.error(`API Error at ${endpoint}:`, error);
         
-        // Custom error message for connection refusal (Server down)
         if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
-            throw new Error(`Cannot connect to server at ${API_URL}. Is the backend running?`);
+            throw new Error(`Connection Error: Ensure Backend is running at ${API_URL}`);
         }
         throw error;
     }
@@ -73,21 +76,21 @@ export const api = {
         let users: User[] = [];
         let refreshedUser = null;
 
-        if (currentUser && currentUser.id && currentUser.id !== 'undefined' && currentUser.id !== 'null') {
-            // If logged in, refresh user data
+        if (currentUser && currentUser.id && currentUser.id !== 'undefined') {
             try {
+                // Refresh specific user data
                 refreshedUser = await request(`/users/${currentUser.id}`);
                 
-                // If Admin, fetch all users for dashboard
-                // We double check the role from the FRESH user object, not the stale state
+                // If Admin, fetch ALL users immediately to ensure dashboard is live
                 if (refreshedUser.role === 'admin') {
                     users = await request('/admin/users');
                 } else {
                     users = [refreshedUser];
                 }
             } catch (e) {
-                // If user fetch fails (e.g. deleted from DB), log them out conceptually by returning null
-                console.warn("Failed to refresh user session", e);
+                console.warn("Session refresh failed:", e);
+                // Return null user to trigger logout if session is invalid
+                refreshedUser = null; 
             }
         }
 
@@ -101,9 +104,7 @@ export const api = {
 
     // User Actions
     getUser: (userId: string) => {
-        if (!userId || userId === 'undefined' || userId === 'null') {
-            return Promise.reject(new Error("Invalid User ID"));
-        }
+        if (!userId || userId === 'undefined') return Promise.reject(new Error("Invalid ID"));
         return request(`/users/${userId}`);
     },
 
@@ -117,10 +118,13 @@ export const api = {
         body: JSON.stringify({ userId })
     }),
 
-    recharge: (userId: string, amount: number) => request('/transactions', {
-        method: 'POST',
-        body: JSON.stringify({ userId, type: 'recharge', amount })
-    }),
+    recharge: (userId: string, amount: number) => {
+        if (!userId) return Promise.reject(new Error("User ID missing"));
+        return request('/transactions', {
+            method: 'POST',
+            body: JSON.stringify({ userId, type: 'recharge', amount })
+        });
+    },
 
     withdraw: (userId: string, amount: number, details: any) => request('/transactions', {
         method: 'POST',
