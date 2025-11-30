@@ -1,4 +1,5 @@
 
+
 export type Role = 'user' | 'admin';
 
 export interface Product {
@@ -19,6 +20,7 @@ export interface Investment {
   purchaseDate: string; // ISO string
   lastClaimDate: string; // ISO string
   claimedAmount: number;
+  productSnapshot?: Product;
 }
 
 export interface Transaction {

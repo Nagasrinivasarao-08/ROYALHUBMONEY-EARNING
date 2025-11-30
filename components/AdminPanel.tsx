@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Product, User, AppSettings, Transaction } from '../types';
-import { Plus, Trash2, Users, ShoppingBag, ArrowDownLeft, Settings, Check, X, QrCode, DollarSign, AlertCircle, Clock, ShieldAlert, Image, Building, Lock, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Users, ShoppingBag, ArrowDownLeft, Settings, Check, X, QrCode, DollarSign, AlertCircle, Clock, ShieldAlert, Image, Building, Lock, AlertTriangle, Edit } from 'lucide-react';
 
 interface AdminPanelProps {
   currentUser: User;
@@ -17,6 +17,7 @@ interface AdminPanelProps {
   onNavigate: (tab: string) => void;
   onUpdateAdminCredentials: (email: string, password: string) => void;
   onResetData: () => void;
+  onUpdateUser: (userId: string, updates: Partial<User>) => void;
 }
 
 type AdminView = 'dashboard' | 'users' | 'products' | 'recharges' | 'withdrawals' | 'orders' | 'settings';
@@ -35,7 +36,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     onRejectRecharge,
     onNavigate,
     onUpdateAdminCredentials,
-    onResetData
+    onResetData,
+    onUpdateUser
 }) => {
   // Security Check with Auto-Redirect
   useEffect(() => {
@@ -93,11 +95,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       confirmPassword: ''
   });
 
+  // User Management Modal State
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editForm, setEditForm] = useState({ balance: '', password: '' });
+
   // Derived Data
   const totalUsers = users.filter(u => u.role !== 'admin').length;
   
   const allOrders = users.flatMap(u => u.investments.map(inv => {
-      const product = products.find(p => p.id === inv.productId);
+      const product = inv.productSnapshot || products.find(p => p.id === inv.productId);
       return {
           ...inv,
           username: u.username,
@@ -145,6 +151,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 1024 * 1024) {
+          // Use callback if provided in props later, for now simple alert/toast handled by caller
+          // Since we inside AdminPanel, we can't easily trigger App toast directly without prop drilling
+          // But we replaced standard alerts with callbacks in previous step.
+          // For file validation we will stick to native alert or just return.
           alert('Image size exceeds 1MB limit. Please choose a smaller image to ensure app performance.');
           return;
       }
@@ -198,6 +208,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
   }
 
+  // Handle opening user edit modal
+  const openEditUser = (user: User) => {
+      setEditingUser(user);
+      setEditForm({ balance: user.balance.toString(), password: '' });
+  };
+
+  // Handle saving user changes
+  const handleSaveUser = () => {
+      if (!editingUser) return;
+      
+      const updates: Partial<User> = {};
+      
+      if (editForm.balance !== '') {
+          const newBalance = parseFloat(editForm.balance);
+          if (!isNaN(newBalance)) {
+              updates.balance = newBalance;
+          }
+      }
+
+      if (editForm.password.trim() !== '') {
+          updates.password = editForm.password;
+      }
+
+      if (Object.keys(updates).length > 0) {
+          onUpdateUser(editingUser.id, updates);
+      }
+      setEditingUser(null);
+  };
+
+  const handleDeleteUser = () => {
+      // In a real app we'd likely deactivate. Here, deletion is complex due to refs. 
+      // For now, let's just alert functionality limit or implement later.
+      alert("User deletion is restricted to prevent data corruption. You can change their password to lock them out.");
+  };
+
   // --- Sub-Components for Views ---
 
   const DashboardView = () => (
@@ -230,15 +275,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const UsersView = () => (
       <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100">
-          <div className="p-3 border-b border-gray-100 bg-gray-50 font-bold text-xs uppercase text-gray-500">
-              Registered Users
+          <div className="p-3 border-b border-gray-100 bg-gray-50 font-bold text-xs uppercase text-gray-500 flex justify-between items-center">
+              <span>Registered Users</span>
+              <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[10px]">{users.filter(u => u.role !== 'admin').length}</span>
           </div>
           <table className="w-full text-sm text-left">
               <thead className="bg-white text-gray-500 text-xs border-b border-gray-100">
                   <tr>
                       <th className="px-4 py-3 font-medium">User Details</th>
                       <th className="px-4 py-3 font-medium text-right">Balance</th>
-                      <th className="px-4 py-3 font-medium text-right">Joined</th>
+                      <th className="px-4 py-3 font-medium text-right">Actions</th>
                   </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -250,7 +296,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               <div className="text-[10px] text-gray-400 mt-0.5">Ref: {u.referralCode}</div>
                           </td>
                           <td className="px-4 py-3 text-right font-bold text-amber-600">₹{u.balance.toFixed(2)}</td>
-                          <td className="px-4 py-3 text-right text-gray-400 text-xs">{new Date(u.registeredAt).toLocaleDateString()}</td>
+                          <td className="px-4 py-3 text-right">
+                              <button 
+                                onClick={() => openEditUser(u)}
+                                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md text-xs font-bold transition-colors flex items-center ml-auto"
+                              >
+                                  <Edit size={12} className="mr-1"/> Manage
+                              </button>
+                          </td>
                       </tr>
                   ))}
                   {users.filter(u => u.role !== 'admin').length === 0 && (
@@ -331,6 +384,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                     <div>
                                         <p className="font-bold text-lg text-gray-800">{tx.username}</p>
                                         <p className="text-xs text-gray-500">Req: {new Date(tx.date).toLocaleString()}</p>
+                                        <p className="text-xs text-gray-500 mt-1">Current Balance: <span className="font-semibold text-gray-700">₹{tx.currentBalance?.toFixed(2)}</span></p>
                                     </div>
                                     <div className="text-right">
                                         <p className="font-bold text-2xl text-green-600">+₹{tx.amount}</p>
@@ -756,6 +810,65 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         {view === 'recharges' && <RechargesView />}
         {view === 'withdrawals' && <WithdrawalsView />}
         {view === 'settings' && <SettingsView />}
+
+        {/* Edit User Modal */}
+        {editingUser && (
+            <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-xl w-full max-w-sm overflow-hidden animate-bounce-in">
+                    <div className="bg-gray-900 text-white p-4 flex justify-between items-center">
+                        <h3 className="font-bold">Manage User</h3>
+                        <button onClick={() => setEditingUser(null)}><X size={18} /></button>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <div className="text-center mb-4">
+                            <div className="w-12 h-12 bg-gray-100 rounded-full mx-auto flex items-center justify-center mb-2 font-bold text-xl text-gray-700">
+                                {editingUser.username.charAt(0).toUpperCase()}
+                            </div>
+                            <h4 className="font-bold text-gray-800">{editingUser.username}</h4>
+                            <p className="text-xs text-gray-500">{editingUser.email}</p>
+                        </div>
+                        
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 mb-1">Wallet Balance (₹)</label>
+                            <input 
+                                type="number" 
+                                value={editForm.balance}
+                                onChange={(e) => setEditForm({...editForm, balance: e.target.value})}
+                                className="w-full p-2 border rounded text-sm"
+                            />
+                            <p className="text-[10px] text-gray-400 mt-1">Manually set user balance</p>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 mb-1">Reset Password</label>
+                            <input 
+                                type="text" 
+                                value={editForm.password}
+                                onChange={(e) => setEditForm({...editForm, password: e.target.value})}
+                                className="w-full p-2 border rounded text-sm"
+                                placeholder="Enter new password"
+                            />
+                            <p className="text-[10px] text-gray-400 mt-1">Leave empty to keep current password</p>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                             <button 
+                                onClick={handleDeleteUser}
+                                className="flex-1 bg-red-50 text-red-600 py-2 rounded font-bold text-xs hover:bg-red-100"
+                             >
+                                 Delete User
+                             </button>
+                             <button 
+                                onClick={handleSaveUser}
+                                className="flex-1 bg-green-600 text-white py-2 rounded font-bold text-xs hover:bg-green-700"
+                             >
+                                 Save Changes
+                             </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };

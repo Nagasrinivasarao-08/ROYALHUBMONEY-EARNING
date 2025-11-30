@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { Invest } from './components/Invest';
@@ -23,11 +23,14 @@ function App() {
       currentUser: null, 
       users: [], 
       products: [], 
-      settings: { upiId: '', qrCodeUrl: '', referralBonusPercentage: 10, withdrawalFeePercentage: 5 }
+      settings: { upiId: '', qrCodeUrl: '', referralBonusPercentage: 5, withdrawalFeePercentage: 5 }
   });
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isAuth, setIsAuth] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  
+  // Ref to track if we need to save state (to avoid saving what we just polled)
+  const shouldSaveRef = useRef(false);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
       const id = Date.now();
@@ -37,7 +40,7 @@ function App() {
       }, 3000);
   };
 
-  // Initialize & Sync
+  // Initialize
   useEffect(() => {
     const loaded = loadState();
     setState(loaded);
@@ -47,31 +50,76 @@ function App() {
           setActiveTab('admin');
       }
     }
+  }, []);
 
-    // Storage Event Listener for Cross-Tab Sync
+  // Real-time Polling & Sync
+  useEffect(() => {
+    // 1. Listen for cross-tab storage events
     const handleStorageChange = (e: StorageEvent) => {
-        if (e.key === 'investflow_db_v3_royal') {
+        if (e.key && e.key.startsWith('investflow_db')) {
             const newState = loadState();
-            setState(newState);
-            // If user was logged in but removed in another tab, log them out
-            if (state.currentUser && !newState.users.find(u => u.id === state.currentUser?.id)) {
-                handleLogout();
+            // Only update if data actually changed to avoid jitters
+            if (JSON.stringify(newState) !== JSON.stringify(state)) {
+                setState(newState);
+                // If user was logged in but removed in another tab, log them out
+                if (state.currentUser && !newState.users.find(u => u.id === state.currentUser?.id)) {
+                    handleLogout();
+                }
             }
         }
     };
 
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+
+    // 2. Poll every 2 seconds to ensure Admin sees new users immediately (even if event fails)
+    const intervalId = setInterval(() => {
+        // Only poll if we haven't made local changes that are pending save
+        if (!shouldSaveRef.current) {
+            const latestState = loadState();
+            setState(prevState => {
+                // Deep comparison to avoid unnecessary re-renders
+                if (JSON.stringify(latestState.users) !== JSON.stringify(prevState.users) ||
+                    JSON.stringify(latestState.products) !== JSON.stringify(prevState.products) ||
+                    JSON.stringify(latestState.settings) !== JSON.stringify(prevState.settings)) {
+                    
+                    // Preserve current user session but update data
+                    let updatedCurrentUser = prevState.currentUser 
+                        ? latestState.users.find(u => u.id === prevState.currentUser!.id) || null
+                        : null;
+
+                    return {
+                        ...latestState,
+                        currentUser: updatedCurrentUser
+                    };
+                }
+                return prevState;
+            });
+        }
+    }, 2000);
+
+    return () => {
+        window.removeEventListener('storage', handleStorageChange);
+        clearInterval(intervalId);
+    };
   }, []);
 
-  // Persistence
+  // Persistence - Only save when we initiate a change
   useEffect(() => {
-      saveState(state);
+      if (shouldSaveRef.current) {
+          saveState(state);
+          shouldSaveRef.current = false;
+      }
   }, [state]);
+
+  // Helper wrapper to update state and trigger save
+  const updateStateAndSave = (updater: (prev: AppState) => AppState) => {
+      shouldSaveRef.current = true;
+      setState(updater);
+  };
 
   // Helpers to update a specific user safely
   const updateUser = (userId: string, updates: Partial<User>) => {
-      setState(prev => {
+      updateStateAndSave(prev => {
           const updatedUsers = prev.users.map(u => u.id === userId ? { ...u, ...updates } : u);
           const updatedCurrentUser = prev.currentUser?.id === userId ? { ...prev.currentUser, ...updates } : prev.currentUser;
           return {
@@ -85,7 +133,7 @@ function App() {
   const handleLogin = (user: User) => {
       // Always get fresh user data from state
       const freshUser = state.users.find(u => u.id === user.id) || user;
-      setState(prev => ({ ...prev, currentUser: freshUser }));
+      updateStateAndSave(prev => ({ ...prev, currentUser: freshUser }));
       setIsAuth(true);
       showToast(`Welcome back, ${freshUser.username}!`, 'success');
       
@@ -97,7 +145,7 @@ function App() {
   };
 
   const handleRegister = (newUser: User) => {
-      setState(prev => ({ 
+      updateStateAndSave(prev => ({ 
           ...prev, 
           users: [...prev.users, newUser],
           currentUser: newUser 
@@ -109,7 +157,7 @@ function App() {
 
   const handleLogout = () => {
     setIsAuth(false);
-    setState(prev => ({ ...prev, currentUser: null }));
+    updateStateAndSave(prev => ({ ...prev, currentUser: null }));
     setActiveTab('dashboard');
     showToast('Logged out successfully.', 'info');
   };
@@ -166,15 +214,23 @@ function App() {
         return;
     }
 
-    setState(prev => {
+    // Check for potential referral bonus before update for UI feedback
+    const isFirstInvestment = state.currentUser.investments.length === 0;
+    const hasReferrer = !!state.currentUser.referredBy;
+
+    updateStateAndSave(prev => {
         const currentUser = prev.currentUser!;
         
+        // Create Snapshot of Product to persist terms (even if admin changes/deletes product later)
+        const productSnapshot = { ...product };
+
         const newInvestment: Investment = {
             id: Date.now().toString(),
             productId: product.id,
             purchaseDate: new Date().toISOString(),
             lastClaimDate: new Date().toISOString(),
-            claimedAmount: 0
+            claimedAmount: 0,
+            productSnapshot: productSnapshot
         };
 
         const newTx: Transaction = {
@@ -194,9 +250,9 @@ function App() {
         };
 
         let updatedReferrer = null;
-        const bonusPercentage = prev.settings.referralBonusPercentage ?? 10;
+        const bonusPercentage = prev.settings.referralBonusPercentage ?? 5; // Default to 5% if not set
 
-        // Referral Logic
+        // Referral Logic: Auto-Add Bonus on FIRST investment only
         if (currentUser.investments.length === 0 && currentUser.referredBy) {
             const referrer = prev.users.find(u => u.referralCode === currentUser.referredBy);
             if (referrer) {
@@ -234,6 +290,10 @@ function App() {
 
     setActiveTab('dashboard');
     showToast(`Successfully invested in ${product.name}!`, 'success');
+    
+    if (isFirstInvestment && hasReferrer) {
+        showToast('Referral bonus automatically applied to your inviter!', 'success');
+    }
   };
 
   const handleClaim = () => {
@@ -242,12 +302,14 @@ function App() {
     const now = new Date().toISOString();
     
     const updatedInvestments = state.currentUser.investments.map(inv => {
-        const product = state.products.find(p => p.id === inv.productId);
-        if(!product) return inv;
+        // Use Snapshot first for accuracy, or fallback to current product list
+        const product = inv.productSnapshot || state.products.find(p => p.id === inv.productId);
+        
+        if(!product) return inv; // Should not happen with snapshot
 
         const lastClaim = new Date(inv.lastClaimDate).getTime();
         const currentTime = new Date().getTime();
-        const INTERVAL = 10000; 
+        const INTERVAL = 24 * 60 * 60 * 1000; // 24 Hours
 
         if (currentTime - lastClaim >= INTERVAL) {
             totalClaim += product.dailyIncome;
@@ -274,23 +336,25 @@ function App() {
         };
         updateUser(state.currentUser.id, updatedUser);
         showToast(`Collected ₹${totalClaim.toFixed(2)} profit!`, 'success');
+    } else {
+        showToast('Nothing to claim yet. Please wait for the cycle to complete.', 'info');
     }
   };
 
   // --- Admin Functions ---
 
   const handleAddProduct = (product: Product) => {
-    setState(prev => ({ ...prev, products: [...prev.products, product] }));
+    updateStateAndSave(prev => ({ ...prev, products: [...prev.products, product] }));
     showToast('Product added successfully', 'success');
   };
 
   const handleDeleteProduct = (id: string) => {
-      setState(prev => ({ ...prev, products: prev.products.filter(p => p.id !== id) }));
+      updateStateAndSave(prev => ({ ...prev, products: prev.products.filter(p => p.id !== id) }));
       showToast('Product deleted', 'info');
   };
 
   const handleUpdateSettings = (newSettings: AppSettings) => {
-      setState(prev => ({ ...prev, settings: newSettings }));
+      updateStateAndSave(prev => ({ ...prev, settings: newSettings }));
       showToast('System settings updated', 'success');
   };
 
@@ -304,6 +368,12 @@ function App() {
 
     updateUser(state.currentUser.id, { email, password });
     showToast('Admin credentials updated.', 'success');
+  };
+
+  // Direct User Management (Admin Edit)
+  const handleAdminUpdateUser = (userId: string, updates: Partial<User>) => {
+      updateUser(userId, updates);
+      showToast('User updated successfully.', 'success');
   };
 
   const handleApproveRecharge = (userId: string, txId: string) => {
@@ -374,7 +444,7 @@ function App() {
 
   const handleResetData = () => {
       const defaultState = resetData();
-      setState(defaultState);
+      updateStateAndSave(() => defaultState);
       setIsAuth(false);
       showToast('System Factory Reset Complete.', 'success');
   };
@@ -456,6 +526,7 @@ function App() {
                     onNavigate={setActiveTab}
                     onUpdateAdminCredentials={handleUpdateAdminCredentials}
                     onResetData={handleResetData}
+                    onUpdateUser={handleAdminUpdateUser}
                 />
             )}
             

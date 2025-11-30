@@ -14,27 +14,34 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, products, onClaim })
   const [nextClaimTime, setNextClaimTime] = useState<string>('');
 
   const totalInvested = user.investments.reduce((sum, inv) => {
-    const product = products.find(p => p.id === inv.productId);
-    return sum + (product?.price || 0);
+    // Use snapshot price if available, otherwise fallback (though snapshot should always exist for new logic)
+    return sum + (inv.productSnapshot?.price || 0);
   }, 0);
 
   const totalDailyIncome = user.investments.reduce((sum, inv) => {
-    const product = products.find(p => p.id === inv.productId);
-    return sum + (product?.dailyIncome || 0);
+    return sum + (inv.productSnapshot?.dailyIncome || 0);
   }, 0);
+
+  // Helper to format milliseconds into HH:MM:SS
+  const formatTimeLeft = (ms: number) => {
+      const totalSeconds = Math.floor(ms / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
 
   // Check if any earnings are claimable
   useEffect(() => {
     const checkClaimable = () => {
       let claimable = false;
       let minNextTime = Infinity;
+      const CLAIM_INTERVAL = 24 * 60 * 60 * 1000; // 24 Hours
 
       user.investments.forEach(inv => {
         const lastClaim = new Date(inv.lastClaimDate).getTime();
         const now = Date.now();
         const elapsed = now - lastClaim;
-        // Mock: 10 seconds for demo purposes
-        const CLAIM_INTERVAL = 10000; 
 
         if (elapsed >= CLAIM_INTERVAL) {
           claimable = true;
@@ -47,8 +54,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, products, onClaim })
       setCanClaim(claimable);
       
       if (!claimable && minNextTime !== Infinity) {
-          const secondsLeft = Math.ceil((minNextTime - Date.now()) / 1000);
-          setNextClaimTime(`${secondsLeft}s`);
+          const timeLeft = minNextTime - Date.now();
+          if (timeLeft > 0) {
+              setNextClaimTime(formatTimeLeft(timeLeft));
+          } else {
+              setNextClaimTime('00:00:00');
+          }
       } else {
           setNextClaimTime('');
       }
@@ -152,41 +163,57 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, products, onClaim })
             </div>
           ) : (
             user.investments.map((inv) => {
-              const product = products.find(p => p.id === inv.productId);
-              if (!product) return null;
+              // Priority: Use Snapshot, Fallback: Look up current products, Final: Placeholder
+              const productSnapshot = inv.productSnapshot;
+              const currentProduct = products.find(p => p.id === inv.productId);
               
+              // If we have neither snapshot nor current product, this is an orphaned record
+              if (!productSnapshot && !currentProduct) {
+                  return (
+                      <div key={inv.id} className="bg-white rounded-lg p-4 border border-red-100">
+                          <p className="text-red-500 text-sm">Discontinued Product (ID: {inv.productId})</p>
+                      </div>
+                  );
+              }
+
+              // Use snapshot data if available for consistency, else fall back to current
+              const name = productSnapshot?.name || currentProduct?.name;
+              const image = productSnapshot?.image || currentProduct?.image;
+              const dailyIncome = productSnapshot?.dailyIncome || currentProduct?.dailyIncome;
+              const totalRevenue = productSnapshot?.totalRevenue || currentProduct?.totalRevenue;
+              const days = productSnapshot?.days || currentProduct?.days || 30;
+
               const now = new Date();
               const purchaseDate = new Date(inv.purchaseDate);
               const endDate = new Date(purchaseDate);
-              endDate.setDate(endDate.getDate() + product.days);
+              endDate.setDate(endDate.getDate() + days);
               
-              const totalDays = product.days;
               const daysPassed = Math.floor((now.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24));
-              const progress = Math.min(100, Math.max(0, (daysPassed / totalDays) * 100));
+              const progress = Math.min(100, Math.max(0, (daysPassed / days) * 100));
 
               return (
                 <div key={inv.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                     <div className="flex">
                         <div className="w-1/3 h-32 relative">
-                            <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                            <img src={image} alt={name} className="w-full h-full object-cover" />
                         </div>
                         <div className="w-2/3 p-3 flex flex-col justify-between">
                             <div>
-                                <h4 className="font-bold text-[#2c1810] text-lg">{product.name}</h4>
+                                <h4 className="font-bold text-[#2c1810] text-lg">{name}</h4>
                                 <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
                                     <div className="bg-amber-500 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
                                 </div>
                             </div>
                             <div className="text-xs space-y-1 mt-2 text-gray-600">
-                                <p>Lease Time: <span className="font-semibold">{product.days} Days</span></p>
+                                <p>Lease Time: <span className="font-semibold">{days} Days</span></p>
                                 <p>Expiration: {endDate.toLocaleDateString()}</p>
                                 <p>Get Time: {purchaseDate.toLocaleDateString()} {purchaseDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                             </div>
                         </div>
                     </div>
                     <div className="bg-[#2c1810] text-white p-2 flex justify-between items-center text-sm px-4">
-                         <span>Daily: ₹{product.dailyIncome}</span>
-                         <span className="text-amber-400 font-bold">Total: ₹{product.totalRevenue}</span>
+                         <span>Daily: ₹{dailyIncome}</span>
+                         <span className="text-amber-400 font-bold">Total: ₹{totalRevenue}</span>
                     </div>
                 </div>
               );
