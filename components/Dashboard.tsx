@@ -12,6 +12,7 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ user, products, onClaim }) => {
   const [canClaim, setCanClaim] = useState(false);
   const [nextClaimTime, setNextClaimTime] = useState<string>('');
+  const [isClaiming, setIsClaiming] = useState(false);
 
   const totalInvested = user.investments.reduce((sum, inv) => {
     // Use snapshot price if available, otherwise fallback (though snapshot should always exist for new logic)
@@ -29,6 +30,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, products, onClaim })
       const minutes = Math.floor((totalSeconds % 3600) / 60);
       const seconds = totalSeconds % 60;
       return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const handleClaimClick = async () => {
+    setIsClaiming(true);
+    // Add a small delay for better UX so the user sees the processing state
+    await new Promise(resolve => setTimeout(resolve, 800));
+    onClaim();
+    setIsClaiming(false);
   };
 
   // Check if any earnings are claimable
@@ -113,15 +122,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, products, onClaim })
       {/* Action Button - Styled like screenshot "Waiting for Profit" */}
       <div className="grid grid-cols-1 gap-3">
         <button
-            onClick={onClaim}
-            disabled={!canClaim}
+            onClick={handleClaimClick}
+            disabled={!canClaim || isClaiming}
             className={`w-full py-4 rounded-sm font-bold text-lg shadow-md flex items-center justify-center transition-all uppercase tracking-wide ${
-            canClaim 
+            canClaim && !isClaiming
                 ? 'bg-amber-500 hover:bg-amber-600 text-white animate-pulse' 
                 : 'bg-amber-400/50 text-white cursor-not-allowed'
             }`}
         >
-            {canClaim ? 'Collect Profit' : (nextClaimTime ? `Wait: ${nextClaimTime}` : 'Waiting For Profit')}
+            {isClaiming ? (
+                <>
+                   <span className="animate-spin mr-2">⟳</span> Processing...
+                </>
+            ) : canClaim ? 'Collect Profit' : (nextClaimTime ? `Wait: ${nextClaimTime}` : 'Waiting For Profit')}
         </button>
       </div>
 
