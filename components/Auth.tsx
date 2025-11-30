@@ -1,0 +1,289 @@
+
+import React, { useState, useEffect } from 'react';
+import { User } from '../types';
+import { Check, X, AlertCircle, Shield, User as UserIcon, Lock, Users, Key } from 'lucide-react';
+
+interface AuthProps {
+  onLogin: (user: User) => void;
+  onRegister: (newUser: User) => void;
+  users: User[];
+}
+
+type AuthMode = 'login' | 'register' | 'admin';
+
+export const Auth: React.FC<AuthProps> = ({ onLogin, onRegister, users }) => {
+  const [mode, setMode] = useState<AuthMode>('login');
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    referralCode: ''
+  });
+  const [error, setError] = useState('');
+  const [referralStatus, setReferralStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
+
+  // Check for referral code in URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref) {
+      setMode('register');
+      setFormData(prev => ({ ...prev, referralCode: ref }));
+      
+      // Validate immediate if users are loaded
+      if (users.length > 0) {
+        const isValid = users.some(u => u.referralCode === ref);
+        setReferralStatus(isValid ? 'valid' : 'invalid');
+      }
+    }
+  }, [users]);
+
+  const authenticateUser = (isLogin: boolean) => {
+    const user = users.find(u => u.email === formData.email && u.password === formData.password);
+    
+    if (user) {
+      if (mode === 'admin' && user.role !== 'admin') {
+          setError('This account does not have admin privileges.');
+          return;
+      }
+      onLogin(user);
+    } else {
+      setError('Invalid email or password');
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (mode === 'login' || mode === 'admin') {
+      authenticateUser(true);
+    } else {
+      // Register
+      if (!formData.username || !formData.email || !formData.password) {
+        setError('All fields are required');
+        return;
+      }
+      if (formData.password !== formData.confirmPassword) {
+        setError('Passwords do not match');
+        return;
+      }
+      if (users.some(u => u.email === formData.email)) {
+        setError('Email already registered');
+        return;
+      }
+
+      // Validate Referral Code if provided
+      if (formData.referralCode.trim() !== '') {
+        const referrerExists = users.some(u => u.referralCode === formData.referralCode.trim());
+        if (!referrerExists) {
+          setError('Invalid Referral Code. Please check or leave empty.');
+          return;
+        }
+      }
+
+      const refCode = formData.username.substring(0, 4).toUpperCase() + Math.floor(Math.random() * 1000);
+
+      const newUser: User = {
+        id: Date.now().toString(),
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+        role: 'user',
+        balance: 0,
+        referralCode: refCode,
+        referredBy: formData.referralCode.trim(),
+        investments: [],
+        transactions: [],
+        registeredAt: new Date().toISOString()
+      };
+
+      onRegister(newUser);
+    }
+  };
+
+  const handleReferralChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const code = e.target.value.toUpperCase();
+    setFormData({ ...formData, referralCode: code });
+
+    if (code.trim() === '') {
+      setReferralStatus('idle');
+      return;
+    }
+
+    const isValid = users.some(u => u.referralCode === code.trim());
+    setReferralStatus(isValid ? 'valid' : 'invalid');
+  };
+
+  const fillAdminCredentials = () => {
+    setMode('admin');
+    setFormData({
+        ...formData,
+        email: 'srinivas@gmail.com',
+        password: 'srinivas@9121',
+        username: '',
+        confirmPassword: '',
+        referralCode: ''
+    });
+    setError('');
+  };
+
+  return (
+    <div className="min-h-screen bg-[#2c1810] flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-bounce-in">
+        
+        {/* Header Section */}
+        <div className="bg-amber-600 p-6 text-center text-white relative overflow-hidden">
+             <div className="relative z-10">
+                <div className="w-12 h-12 bg-white rounded-lg mx-auto flex items-center justify-center mb-3 text-[#2c1810] text-2xl font-bold shadow-lg">
+                    R
+                </div>
+                <h1 className="text-2xl font-bold">Royal Hub</h1>
+                <p className="text-amber-100 text-xs mt-1">
+                    {mode === 'admin' ? 'Secure Admin Portal' : 'Premium Investment Platform'}
+                </p>
+             </div>
+             <div className="absolute top-0 left-0 w-full h-full bg-black/10"></div>
+        </div>
+
+        {/* Tab Switcher */}
+        <div className="flex border-b border-gray-200">
+            <button 
+                onClick={() => setMode('login')}
+                className={`flex-1 py-3 text-sm font-medium transition-colors ${mode === 'login' ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+                Login
+            </button>
+            <button 
+                onClick={() => setMode('register')}
+                className={`flex-1 py-3 text-sm font-medium transition-colors ${mode === 'register' ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+                Register
+            </button>
+            <button 
+                onClick={() => setMode('admin')}
+                className={`flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center ${mode === 'admin' ? 'text-[#2c1810] border-b-2 border-[#2c1810] bg-gray-100' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+                <Shield size={14} className="mr-1" /> Admin
+            </button>
+        </div>
+
+        <div className="p-8">
+            <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                {mode === 'login' && <><UserIcon size={20} className="mr-2 text-amber-600"/> User Login</>}
+                {mode === 'register' && <><Users size={20} className="mr-2 text-amber-600"/> Create Account</>}
+                {mode === 'admin' && <><Lock size={20} className="mr-2 text-[#2c1810]"/> Admin Access</>}
+            </h2>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === 'register' && (
+                <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Full Name</label>
+                <input
+                    type="text"
+                    value={formData.username}
+                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                    placeholder="Enter your name"
+                />
+                </div>
+            )}
+            
+            <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Email Address</label>
+                <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 outline-none ${mode === 'admin' ? 'focus:ring-gray-500' : 'focus:ring-amber-500'}`}
+                placeholder="Enter email"
+                />
+            </div>
+
+            <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Password</label>
+                <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 outline-none ${mode === 'admin' ? 'focus:ring-gray-500' : 'focus:ring-amber-500'}`}
+                placeholder="Enter password"
+                />
+            </div>
+
+            {mode === 'register' && (
+                <>
+                <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Confirm Password</label>
+                    <input
+                    type="password"
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                    placeholder="Confirm password"
+                    />
+                </div>
+                
+                <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Referral Code (Optional)</label>
+                    <div className="relative">
+                        <input
+                        type="text"
+                        value={formData.referralCode}
+                        onChange={handleReferralChange}
+                        className={`w-full p-3 border rounded-lg focus:ring-2 outline-none pr-10 ${
+                            referralStatus === 'valid' ? 'border-green-500 focus:ring-green-200' :
+                            referralStatus === 'invalid' ? 'border-red-500 focus:ring-red-200' :
+                            'border-gray-300 focus:ring-amber-500'
+                        }`}
+                        placeholder="Enter referral code"
+                        />
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                            {referralStatus === 'valid' && <Check size={20} className="text-green-500" />}
+                            {referralStatus === 'invalid' && <X size={20} className="text-red-500" />}
+                        </div>
+                    </div>
+                    {referralStatus === 'valid' && <p className="text-[10px] text-green-600 mt-1 flex items-center"><Check size={10} className="mr-1"/> Code valid</p>}
+                    {referralStatus === 'invalid' && (
+                        <p className="text-[10px] text-red-500 mt-1 flex items-center">
+                            <AlertCircle size={10} className="mr-1"/> Code not found. (Hint: Try "ADMIN")
+                        </p>
+                    )}
+                </div>
+                </>
+            )}
+
+            {error && <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded animate-bounce-in">
+                <p className="text-red-700 text-sm font-medium flex items-center">
+                    <AlertCircle size={16} className="mr-2"/> {error}
+                </p>
+            </div>}
+
+            <button
+                type="submit"
+                className={`w-full text-white py-3 rounded-lg font-bold transition-colors uppercase tracking-wide shadow-lg mt-4 ${
+                    mode === 'admin' ? 'bg-[#2c1810] hover:bg-black' : 'bg-amber-600 hover:bg-amber-700'
+                }`}
+            >
+                {mode === 'login' ? 'Login' : mode === 'register' ? 'Register Account' : 'Access Admin Panel'}
+            </button>
+            </form>
+
+            <div className="mt-6 pt-4 border-t border-gray-100 flex justify-center">
+                {mode === 'admin' ? (
+                     <button 
+                        onClick={fillAdminCredentials}
+                        className="text-xs text-gray-400 hover:text-gray-800 flex items-center transition-colors"
+                    >
+                        <Shield size={12} className="mr-1" /> Use Demo Admin Credentials
+                    </button>
+                ) : (
+                    <p className="text-xs text-gray-400">Secure 256-bit Encryption</p>
+                )}
+            </div>
+        </div>
+      </div>
+    </div>
+  );
+};
