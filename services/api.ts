@@ -9,15 +9,25 @@ const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000
 
 // Helper for Fetch
 const request = async (endpoint: string, options: RequestInit = {}) => {
-    const res = await fetch(`${API_URL}${endpoint}`, {
-        headers: { 'Content-Type': 'application/json' },
-        ...options
-    });
-    if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "API Request Failed");
+    try {
+        const res = await fetch(`${API_URL}${endpoint}`, {
+            headers: { 'Content-Type': 'application/json' },
+            ...options
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.message || "API Request Failed");
+        }
+        return res.json();
+    } catch (error: any) {
+        console.error(`API Error at ${API_URL}${endpoint}:`, error);
+        
+        // Custom error message for connection refusal (Server down)
+        if (error.message === 'Failed to fetch') {
+            throw new Error("Cannot connect to server. Is 'npm run server' running?");
+        }
+        throw error;
     }
-    return res.json();
 };
 
 export const api = {
@@ -43,13 +53,18 @@ export const api = {
 
         if (currentUser) {
             // If logged in, refresh user data
-            refreshedUser = await request(`/users/${currentUser.id}`);
-            
-            // If Admin, fetch all users for dashboard
-            if (currentUser.role === 'admin') {
-                users = await request('/admin/users');
-            } else {
-                users = [refreshedUser];
+            try {
+                refreshedUser = await request(`/users/${currentUser.id}`);
+                
+                // If Admin, fetch all users for dashboard
+                if (currentUser.role === 'admin') {
+                    users = await request('/admin/users');
+                } else {
+                    users = [refreshedUser];
+                }
+            } catch (e) {
+                // If user fetch fails (e.g. deleted from DB), log them out conceptually by returning null
+                console.warn("Failed to refresh user session", e);
             }
         }
 
