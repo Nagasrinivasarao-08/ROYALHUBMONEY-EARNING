@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Product, User, AppSettings, Transaction } from '../types';
-import { Plus, Trash2, Users, ShoppingBag, ArrowDownLeft, Settings, Check, X, QrCode, DollarSign, AlertCircle, Clock, ShieldAlert, Image, Building, Lock } from 'lucide-react';
+import { Plus, Trash2, Users, ShoppingBag, ArrowDownLeft, Settings, Check, X, QrCode, DollarSign, AlertCircle, Clock, ShieldAlert, Image, Building, Lock, AlertTriangle } from 'lucide-react';
 
 interface AdminPanelProps {
   currentUser: User;
@@ -16,6 +16,7 @@ interface AdminPanelProps {
   onRejectRecharge: (userId: string, txId: string) => void;
   onNavigate: (tab: string) => void;
   onUpdateAdminCredentials: (email: string, password: string) => void;
+  onResetData: () => void;
 }
 
 type AdminView = 'dashboard' | 'users' | 'products' | 'recharges' | 'withdrawals' | 'orders' | 'settings';
@@ -33,7 +34,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     onApproveRecharge,
     onRejectRecharge,
     onNavigate,
-    onUpdateAdminCredentials
+    onUpdateAdminCredentials,
+    onResetData
 }) => {
   // Security Check with Auto-Redirect
   useEffect(() => {
@@ -137,13 +139,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     };
     onAddProduct(product);
     setNewProduct({ name: 'ROYAL-', price: 0, dailyIncome: 0, days: 365, purchaseLimit: 2, description: '', image: '' });
-    alert('Product added!');
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Add size validation to prevent localStorage overflow (1MB Limit)
       if (file.size > 1024 * 1024) {
           alert('Image size exceeds 1MB limit. Please choose a smaller image to ensure app performance.');
           return;
@@ -166,7 +166,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
       const reader = new FileReader();
       reader.onloadend = () => {
-        // Use functional update to ensure state consistency
         setQrForm(prev => ({ ...prev, qrCodeUrl: reader.result as string }));
       };
       reader.readAsDataURL(file);
@@ -176,7 +175,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleSettingsSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       onUpdateSettings(qrForm);
-      alert('Settings Updated!');
   };
 
   const handleAdminCredsSubmit = (e: React.FormEvent) => {
@@ -193,6 +191,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       onUpdateAdminCredentials(adminCreds.email, adminCreds.password || currentUser.password);
       setAdminCreds(prev => ({ ...prev, password: '', confirmPassword: '' }));
   };
+
+  const confirmReset = () => {
+      if(window.confirm("CRITICAL WARNING: This will delete ALL users, orders, and transactions. The system will be reset to factory defaults. Are you sure?")) {
+          onResetData();
+      }
+  }
 
   // --- Sub-Components for Views ---
 
@@ -709,6 +713,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       </button>
                   </div>
               </form>
+          </div>
+
+          {/* Danger Zone */}
+          <div className="border-t-4 border-red-100 pt-8 mt-8">
+              <h2 className="text-lg font-bold mb-4 flex items-center text-red-700">
+                  <AlertTriangle size={20} className="mr-2" /> Danger Zone
+              </h2>
+              <div className="bg-red-50 border border-red-200 p-4 rounded-lg flex justify-between items-center">
+                  <div>
+                      <h3 className="font-bold text-red-900 text-sm">Factory Reset System</h3>
+                      <p className="text-xs text-red-700 mt-1">This will permanently delete ALL users, orders, and transactions. Products will reset to default.</p>
+                  </div>
+                  <button 
+                    onClick={confirmReset}
+                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm"
+                  >
+                      Reset Data
+                  </button>
+              </div>
           </div>
       </div>
   );

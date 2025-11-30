@@ -32,13 +32,13 @@ export const Invest: React.FC<InvestProps> = ({ products, user, onInvest }) => {
       <div className="flex bg-white rounded-lg p-1 shadow-sm border border-amber-100">
         <button 
             onClick={() => setViewMode('cards')}
-            className={`flex-1 py-2 text-sm font-medium rounded-md flex items-center justify-center ${viewMode === 'cards' ? 'bg-amber-500 text-white' : 'text-gray-500'}`}
+            className={`flex-1 py-2 text-sm font-medium rounded-md flex items-center justify-center ${viewMode === 'cards' ? 'bg-amber-50 text-white' : 'text-gray-500'}`}
         >
             <List size={16} className="mr-2" /> Products
         </button>
         <button 
             onClick={() => setViewMode('table')}
-            className={`flex-1 py-2 text-sm font-medium rounded-md flex items-center justify-center ${viewMode === 'table' ? 'bg-amber-500 text-white' : 'text-gray-500'}`}
+            className={`flex-1 py-2 text-sm font-medium rounded-md flex items-center justify-center ${viewMode === 'table' ? 'bg-amber-50 text-white' : 'text-gray-500'}`}
         >
             <TableIcon size={16} className="mr-2" /> Profit Table
         </button>
@@ -47,7 +47,7 @@ export const Invest: React.FC<InvestProps> = ({ products, user, onInvest }) => {
       <div className="bg-amber-50 p-3 rounded-lg border border-amber-200 flex items-start space-x-2">
         <Info className="text-amber-700 flex-shrink-0 mt-0.5" size={18} />
         <p className="text-xs text-amber-900 leading-relaxed">
-            <strong>Royal Mousse Milk Tea</strong> Product Profit Statement. 
+            <strong>Royal Hub</strong> Product Profit Statement. 
             All Product Returns Can Be Collected Daily. 
             Principal is managed by Bank of India.
         </p>
@@ -132,7 +132,7 @@ export const Invest: React.FC<InvestProps> = ({ products, user, onInvest }) => {
         /* Profit Table View */
         <div className="overflow-x-auto bg-white rounded-lg shadow-sm border border-amber-200">
             <div className="bg-[#2c1810] text-white p-3 text-center font-bold text-sm uppercase tracking-wider">
-                (Royal Mousse Milk Tea) Product Profit Statement
+                (Royal Hub) Product Profit Statement
             </div>
             <table className="w-full min-w-[600px] text-xs">
                 <thead>

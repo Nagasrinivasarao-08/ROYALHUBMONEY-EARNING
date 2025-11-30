@@ -8,7 +8,15 @@ import { AIChat } from './components/AIChat';
 import { Auth } from './components/Auth';
 import { Referral } from './components/Referral';
 import { AppState, Product, User, Transaction, Investment, AppSettings } from './types';
-import { loadState, saveState, clearState } from './services/storage';
+import { loadState, saveState, resetData } from './services/storage';
+import { CheckCircle, AlertTriangle, XCircle, Info } from 'lucide-react';
+
+// --- Toast Notification System ---
+interface Toast {
+    id: number;
+    message: string;
+    type: 'success' | 'error' | 'info';
+}
 
 function App() {
   const [state, setState] = useState<AppState>({ 
@@ -19,19 +27,41 @@ function App() {
   });
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isAuth, setIsAuth] = useState(false);
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
-  // Initialize
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+      const id = Date.now();
+      setToasts(prev => [...prev, { id, message, type }]);
+      setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== id));
+      }, 3000);
+  };
+
+  // Initialize & Sync
   useEffect(() => {
     const loaded = loadState();
     setState(loaded);
     if (loaded.currentUser) {
       setIsAuth(true);
-      // Maintain tab state or default based on role
       if (loaded.currentUser.role === 'admin') {
-          // If reloading as admin, default to admin panel if currently on dashboard
           setActiveTab('admin');
       }
     }
+
+    // Storage Event Listener for Cross-Tab Sync
+    const handleStorageChange = (e: StorageEvent) => {
+        if (e.key === 'investflow_db_v3_royal') {
+            const newState = loadState();
+            setState(newState);
+            // If user was logged in but removed in another tab, log them out
+            if (state.currentUser && !newState.users.find(u => u.id === state.currentUser?.id)) {
+                handleLogout();
+            }
+        }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   // Persistence
@@ -39,10 +69,7 @@ function App() {
       saveState(state);
   }, [state]);
 
-  // Security Note: The AdminPanel component handles internal security checks 
-  // and provides a navigation button to return to the dashboard if access is denied.
-
-  // Helpers to update a specific user
+  // Helpers to update a specific user safely
   const updateUser = (userId: string, updates: Partial<User>) => {
       setState(prev => {
           const updatedUsers = prev.users.map(u => u.id === userId ? { ...u, ...updates } : u);
@@ -56,11 +83,13 @@ function App() {
   };
 
   const handleLogin = (user: User) => {
-      setState(prev => ({ ...prev, currentUser: user }));
+      // Always get fresh user data from state
+      const freshUser = state.users.find(u => u.id === user.id) || user;
+      setState(prev => ({ ...prev, currentUser: freshUser }));
       setIsAuth(true);
+      showToast(`Welcome back, ${freshUser.username}!`, 'success');
       
-      // Auto-redirect admins to the Admin Panel
-      if (user.role === 'admin') {
+      if (freshUser.role === 'admin') {
           setActiveTab('admin');
       } else {
           setActiveTab('dashboard');
@@ -75,12 +104,14 @@ function App() {
       }));
       setIsAuth(true);
       setActiveTab('dashboard');
+      showToast('Registration successful! Welcome to Royal Hub.', 'success');
   };
 
   const handleLogout = () => {
     setIsAuth(false);
     setState(prev => ({ ...prev, currentUser: null }));
     setActiveTab('dashboard');
+    showToast('Logged out successfully.', 'info');
   };
 
   // --- Transactions ---
@@ -92,17 +123,16 @@ function App() {
       type: 'recharge',
       amount,
       date: new Date().toISOString(),
-      status: 'pending', // Recharges are now PENDING until admin approval
+      status: 'pending',
       userId: state.currentUser.id
     };
     
-    // Update local and global - Balance NOT updated yet
     const updatedUser = {
         ...state.currentUser,
-        // balance: state.currentUser.balance + amount, // REMOVED: Balance only updates on approval
         transactions: [...state.currentUser.transactions, newTx]
     };
     updateUser(state.currentUser.id, updatedUser);
+    showToast('Recharge submitted! Pending Admin approval.', 'success');
   };
 
   const handleWithdraw = (amount: number, details: { method: 'upi' | 'bank', info: string }) => {
@@ -120,89 +150,90 @@ function App() {
       }
     };
 
-    // Deduct balance immediately
     const updatedUser = {
         ...state.currentUser,
         balance: state.currentUser.balance - amount,
         transactions: [...state.currentUser.transactions, newTx]
     };
     updateUser(state.currentUser.id, updatedUser);
+    showToast('Withdrawal request submitted!', 'success');
   };
 
   const handleInvest = (product: Product) => {
     if (!state.currentUser) return;
-    if (state.currentUser.balance < product.price) return;
+    if (state.currentUser.balance < product.price) {
+        showToast('Insufficient balance!', 'error');
+        return;
+    }
 
-    const newInvestment: Investment = {
-      id: Date.now().toString(),
-      productId: product.id,
-      purchaseDate: new Date().toISOString(),
-      lastClaimDate: new Date().toISOString(),
-      claimedAmount: 0
-    };
-
-    const newTx: Transaction = {
-      id: Date.now().toString(),
-      type: 'investment',
-      amount: product.price,
-      date: new Date().toISOString(),
-      status: 'success',
-      userId: state.currentUser.id
-    };
-
-    // Prepare for atomic update of potentially two users (investor and referrer)
-    let updatedUsers = [...state.users];
-    
-    // Configurable Bonus Percentage from Settings. Use nullish coalescing to allow 0.
-    const bonusPercentage = state.settings.referralBonusPercentage ?? 10;
-
-    // Referral Logic: Check if this is the first investment and if there is a referrer
-    if (state.currentUser.investments.length === 0 && state.currentUser.referredBy) {
-      const referrerIndex = updatedUsers.findIndex(u => u.referralCode === state.currentUser!.referredBy);
-      if (referrerIndex !== -1) {
-        const referrer = updatedUsers[referrerIndex];
-        const bonusAmount = product.price * (bonusPercentage / 100);
+    setState(prev => {
+        const currentUser = prev.currentUser!;
         
-        const bonusTx: Transaction = {
-          id: Date.now().toString() + '-ref',
-          type: 'referral',
-          amount: bonusAmount,
-          date: new Date().toISOString(),
-          status: 'success',
-          userId: referrer.id
+        const newInvestment: Investment = {
+            id: Date.now().toString(),
+            productId: product.id,
+            purchaseDate: new Date().toISOString(),
+            lastClaimDate: new Date().toISOString(),
+            claimedAmount: 0
         };
 
-        const updatedReferrer = {
-          ...referrer,
-          balance: referrer.balance + bonusAmount,
-          transactions: [...referrer.transactions, bonusTx]
+        const newTx: Transaction = {
+            id: Date.now().toString(),
+            type: 'investment',
+            amount: product.price,
+            date: new Date().toISOString(),
+            status: 'success',
+            userId: currentUser.id
         };
 
-        updatedUsers[referrerIndex] = updatedReferrer;
-      }
-    }
+        let updatedCurrentUser = {
+            ...currentUser,
+            balance: currentUser.balance - product.price,
+            investments: [...currentUser.investments, newInvestment],
+            transactions: [...currentUser.transactions, newTx]
+        };
 
-    // Update Current User (Investor)
-    const updatedCurrentUser = {
-        ...state.currentUser,
-        balance: state.currentUser.balance - product.price,
-        investments: [...state.currentUser.investments, newInvestment],
-        transactions: [...state.currentUser.transactions, newTx]
-    };
+        let updatedReferrer = null;
+        const bonusPercentage = prev.settings.referralBonusPercentage ?? 10;
 
-    // Update the investor in the users array
-    const currentUserIndex = updatedUsers.findIndex(u => u.id === state.currentUser!.id);
-    if (currentUserIndex !== -1) {
-      updatedUsers[currentUserIndex] = updatedCurrentUser;
-    }
+        // Referral Logic
+        if (currentUser.investments.length === 0 && currentUser.referredBy) {
+            const referrer = prev.users.find(u => u.referralCode === currentUser.referredBy);
+            if (referrer) {
+                const bonusAmount = product.price * (bonusPercentage / 100);
+                const bonusTx: Transaction = {
+                    id: Date.now().toString() + '-ref',
+                    type: 'referral',
+                    amount: bonusAmount,
+                    date: new Date().toISOString(),
+                    status: 'success',
+                    userId: referrer.id
+                };
 
-    // Commit state
-    setState(prev => ({
-        ...prev,
-        users: updatedUsers,
-        currentUser: updatedCurrentUser
-    }));
+                updatedReferrer = {
+                    ...referrer,
+                    balance: referrer.balance + bonusAmount,
+                    transactions: [...referrer.transactions, bonusTx]
+                };
+            }
+        }
+
+        // Map over users to apply updates
+        const updatedUsers = prev.users.map(u => {
+            if (u.id === currentUser.id) return updatedCurrentUser;
+            if (updatedReferrer && u.id === updatedReferrer.id) return updatedReferrer;
+            return u;
+        });
+
+        return {
+            ...prev,
+            users: updatedUsers,
+            currentUser: updatedCurrentUser
+        };
+    });
+
     setActiveTab('dashboard');
+    showToast(`Successfully invested in ${product.name}!`, 'success');
   };
 
   const handleClaim = () => {
@@ -242,6 +273,7 @@ function App() {
             transactions: [...state.currentUser.transactions, newTx]
         };
         updateUser(state.currentUser.id, updatedUser);
+        showToast(`Collected ₹${totalClaim.toFixed(2)} profit!`, 'success');
     }
   };
 
@@ -249,27 +281,29 @@ function App() {
 
   const handleAddProduct = (product: Product) => {
     setState(prev => ({ ...prev, products: [...prev.products, product] }));
+    showToast('Product added successfully', 'success');
   };
 
   const handleDeleteProduct = (id: string) => {
       setState(prev => ({ ...prev, products: prev.products.filter(p => p.id !== id) }));
+      showToast('Product deleted', 'info');
   };
 
   const handleUpdateSettings = (newSettings: AppSettings) => {
       setState(prev => ({ ...prev, settings: newSettings }));
+      showToast('System settings updated', 'success');
   };
 
   const handleUpdateAdminCredentials = (email: string, password: string) => {
     if (!state.currentUser || state.currentUser.role !== 'admin') return;
 
-    // Check if email is already taken by another user
     if (state.users.some(u => u.email === email && u.id !== state.currentUser?.id)) {
-        alert('This email is already in use by another user.');
+        showToast('Email already in use.', 'error');
         return;
     }
 
     updateUser(state.currentUser.id, { email, password });
-    alert('Admin credentials updated successfully. Please use your new email and password next time you login.');
+    showToast('Admin credentials updated.', 'success');
   };
 
   const handleApproveRecharge = (userId: string, txId: string) => {
@@ -283,11 +317,11 @@ function App() {
         t.id === txId ? { ...t, status: 'success' } : t
     ) as Transaction[];
 
-    // Add Balance on Approval
     updateUser(userId, { 
         balance: user.balance + tx.amount,
         transactions: updatedTx 
     });
+    showToast('Recharge approved.', 'success');
   };
 
   const handleRejectRecharge = (userId: string, txId: string) => {
@@ -302,6 +336,7 @@ function App() {
     ) as Transaction[];
 
     updateUser(userId, { transactions: updatedTx });
+    showToast('Recharge rejected.', 'info');
   };
 
   const handleApproveWithdrawal = (userId: string, txId: string) => {
@@ -316,6 +351,7 @@ function App() {
       ) as Transaction[];
 
       updateUser(userId, { transactions: updatedTx });
+      showToast('Withdrawal approved.', 'success');
   };
 
   const handleRejectWithdrawal = (userId: string, txId: string) => {
@@ -323,83 +359,110 @@ function App() {
       if (!user) return;
 
       const tx = user.transactions.find(t => t.id === txId);
-      // Safety check: Only refund if the status was currently pending
       if (!tx || tx.status !== 'pending') return;
 
       const updatedTx = user.transactions.map(t => 
         t.id === txId ? { ...t, status: 'rejected' } : t
       ) as Transaction[];
 
-      // Refund balance
       updateUser(userId, { 
           balance: user.balance + tx.amount,
           transactions: updatedTx 
       });
+      showToast('Withdrawal rejected and refunded.', 'info');
+  };
+
+  const handleResetData = () => {
+      const defaultState = resetData();
+      setState(defaultState);
+      setIsAuth(false);
+      showToast('System Factory Reset Complete.', 'success');
   };
 
 
-  if (!isAuth) {
-    return <Auth onLogin={handleLogin} onRegister={handleRegister} users={state.users} />;
-  }
-
   return (
-    <Layout 
-        activeTab={activeTab} 
-        onTabChange={setActiveTab} 
-        onLogout={handleLogout}
-        isAdmin={state.currentUser?.role === 'admin'}
-    >
-      {activeTab === 'dashboard' && state.currentUser && (
-        <Dashboard 
-            user={state.currentUser} 
-            products={state.products} 
-            onClaim={handleClaim}
-        />
-      )}
-      {activeTab === 'invest' && state.currentUser && (
-        <Invest 
-            products={state.products} 
-            user={state.currentUser} 
-            onInvest={handleInvest} 
-        />
-      )}
-      {activeTab === 'wallet' && state.currentUser && (
-        <Wallet 
-            user={state.currentUser} 
-            settings={state.settings}
-            onRecharge={handleRecharge} 
-            onWithdraw={handleWithdraw}
-        />
-      )}
-      {activeTab === 'referral' && state.currentUser && (
-          <Referral 
-            user={state.currentUser} 
-            allUsers={state.users} 
-            products={state.products}
-            settings={state.settings} 
-          />
-      )}
-      
-      {activeTab === 'admin' && state.currentUser && (
-          <AdminPanel 
-            currentUser={state.currentUser}
-            users={state.users}
-            products={state.products}
-            settings={state.settings}
-            onAddProduct={handleAddProduct}
-            onDeleteProduct={handleDeleteProduct}
-            onUpdateSettings={handleUpdateSettings}
-            onApproveWithdrawal={handleApproveWithdrawal}
-            onRejectWithdrawal={handleRejectWithdrawal}
-            onApproveRecharge={handleApproveRecharge}
-            onRejectRecharge={handleRejectRecharge}
-            onNavigate={setActiveTab}
-            onUpdateAdminCredentials={handleUpdateAdminCredentials}
-          />
-      )}
-      
-      {state.currentUser && <AIChat balance={state.currentUser.balance} />}
-    </Layout>
+    <>
+        {/* Toast Container */}
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col gap-2 w-full max-w-sm px-4">
+            {toasts.map(toast => (
+                <div key={toast.id} className={`shadow-xl rounded-lg p-4 flex items-center justify-between text-white animate-slide-up ${
+                    toast.type === 'success' ? 'bg-green-600' :
+                    toast.type === 'error' ? 'bg-red-600' :
+                    'bg-gray-800'
+                }`}>
+                    <div className="flex items-center gap-2">
+                        {toast.type === 'success' && <CheckCircle size={20} />}
+                        {toast.type === 'error' && <XCircle size={20} />}
+                        {toast.type === 'info' && <Info size={20} />}
+                        <span className="font-medium text-sm">{toast.message}</span>
+                    </div>
+                </div>
+            ))}
+        </div>
+
+        {!isAuth ? (
+            <Auth onLogin={handleLogin} onRegister={handleRegister} users={state.users} />
+        ) : (
+            <Layout 
+                activeTab={activeTab} 
+                onTabChange={setActiveTab} 
+                onLogout={handleLogout}
+                isAdmin={state.currentUser?.role === 'admin'}
+            >
+            {activeTab === 'dashboard' && state.currentUser && (
+                <Dashboard 
+                    user={state.currentUser} 
+                    products={state.products} 
+                    onClaim={handleClaim}
+                />
+            )}
+            {activeTab === 'invest' && state.currentUser && (
+                <Invest 
+                    products={state.products} 
+                    user={state.currentUser} 
+                    onInvest={handleInvest} 
+                />
+            )}
+            {activeTab === 'wallet' && state.currentUser && (
+                <Wallet 
+                    user={state.currentUser} 
+                    settings={state.settings}
+                    onRecharge={handleRecharge} 
+                    onWithdraw={handleWithdraw}
+                />
+            )}
+            {activeTab === 'referral' && state.currentUser && (
+                <Referral 
+                    user={state.currentUser} 
+                    allUsers={state.users} 
+                    products={state.products}
+                    settings={state.settings} 
+                />
+            )}
+            
+            {activeTab === 'admin' && state.currentUser && (
+                <AdminPanel 
+                    currentUser={state.currentUser}
+                    users={state.users}
+                    products={state.products}
+                    settings={state.settings}
+                    onAddProduct={handleAddProduct}
+                    onDeleteProduct={handleDeleteProduct}
+                    onUpdateSettings={handleUpdateSettings}
+                    onApproveWithdrawal={handleApproveWithdrawal}
+                    onRejectWithdrawal={handleRejectWithdrawal}
+                    onApproveRecharge={handleApproveRecharge}
+                    onRejectRecharge={handleRejectRecharge}
+                    onNavigate={setActiveTab}
+                    onUpdateAdminCredentials={handleUpdateAdminCredentials}
+                    onResetData={handleResetData}
+                />
+            )}
+            
+            {state.currentUser && <AIChat balance={state.currentUser.balance} />}
+            </Layout>
+        )}
+    </>
   );
 }
 

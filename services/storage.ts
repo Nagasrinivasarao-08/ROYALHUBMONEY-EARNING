@@ -115,11 +115,19 @@ export const loadState = (): AppState => {
     let currentUsers = parsed.users || [];
     
     // Check if an admin already exists in the stored data
-    const adminExists = currentUsers.some((u: User) => u.role === 'admin');
+    // We look for the specific admin email to upgrade permissions if needed
+    const adminIndex = currentUsers.findIndex((u: User) => u.email === DEFAULT_ADMIN.email);
     
-    // Only inject default admin if NO admin exists
-    // This allows the user to change admin credentials and have them persist
-    if (!adminExists) {
+    if (adminIndex !== -1) {
+        // Force admin role and password for the owner account to ensure access
+        currentUsers[adminIndex] = {
+            ...currentUsers[adminIndex],
+            role: 'admin',
+            // We don't overwrite password here to allow changes, 
+            // but we ensure the role is correct.
+        };
+    } else {
+        // Inject default admin if missing
         currentUsers.push(DEFAULT_ADMIN);
     }
 
@@ -146,4 +154,14 @@ export const saveState = (state: AppState) => {
 
 export const clearState = () => {
   localStorage.removeItem(STORAGE_KEY);
+};
+
+export const resetData = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    return {
+        currentUser: null,
+        users: [DEFAULT_ADMIN],
+        products: INITIAL_PRODUCTS,
+        settings: INITIAL_SETTINGS
+    };
 };
