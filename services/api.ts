@@ -11,6 +11,8 @@ const isLocal = typeof window !== 'undefined' && (window.location.hostname === '
 const API_URL = (import.meta as any).env?.VITE_API_URL || 
                 (isLocal ? 'http://localhost:5000/api' : 'https://royal-hub-backend.onrender.com/api');
 
+console.log("API Service Initialized. Target:", API_URL);
+
 // Helper for Fetch
 const request = async (endpoint: string, options: RequestInit = {}) => {
     try {
@@ -29,16 +31,22 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
         });
         
         if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.message || "API Request Failed");
+            let errorMessage = "API Request Failed";
+            try {
+                const err = await res.json();
+                errorMessage = err.message || err.error || errorMessage;
+            } catch (e) {
+                errorMessage = `Server Error (${res.status}): ${res.statusText}`;
+            }
+            throw new Error(errorMessage);
         }
         return res.json();
     } catch (error: any) {
         console.error(`API Error at ${API_URL}${endpoint}:`, error);
         
         // Custom error message for connection refusal (Server down)
-        if (error.message === 'Failed to fetch') {
-            throw new Error("Cannot connect to server. Please check your internet connection or server status.");
+        if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
+            throw new Error(`Cannot connect to server at ${API_URL}. Is the backend running?`);
         }
         throw error;
     }
@@ -65,7 +73,7 @@ export const api = {
         let users: User[] = [];
         let refreshedUser = null;
 
-        if (currentUser && currentUser.id && currentUser.id !== 'undefined') {
+        if (currentUser && currentUser.id && currentUser.id !== 'undefined' && currentUser.id !== 'null') {
             // If logged in, refresh user data
             try {
                 refreshedUser = await request(`/users/${currentUser.id}`);

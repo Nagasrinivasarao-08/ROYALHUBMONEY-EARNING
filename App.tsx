@@ -30,6 +30,7 @@ function App() {
   const [isAuth, setIsAuth] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [connectionError, setConnectionError] = useState(false);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
       const id = Date.now();
@@ -50,8 +51,10 @@ function App() {
               // If we are refreshing, keep the session logic consistent
               currentUser: data.currentUser || prev.currentUser
           }));
+          setConnectionError(false);
       } catch (error) {
           console.error("Failed to fetch data:", error);
+          if (!connectionError) setConnectionError(true); // Set error state to stop loading spinner loops if needed
       } finally {
           setIsLoading(false);
       }
@@ -90,8 +93,10 @@ function App() {
                 ...data, 
                 currentUser: restoredUser // Ensure currentUser is set from the restore attempt
             });
+            setConnectionError(false);
         } catch (error) {
             console.error("Init failed:", error);
+            setConnectionError(true);
         } finally {
             setIsLoading(false);
         }
@@ -103,14 +108,13 @@ function App() {
   useEffect(() => {
       if (!isAuth) return;
 
-      // Adaptive Polling: Admins need faster updates (2s) to see new users/orders.
-      // Regular users can poll slower (5s) to save bandwidth.
+      // Adaptive Polling
       const isAdmin = state.currentUser?.role === 'admin';
       const intervalTime = isAdmin ? 2000 : 5000;
 
       const interval = setInterval(() => {
-          // Only poll if we have a valid user
-          if (state.currentUser && state.currentUser.id) {
+          // Robust check: Ensure ID exists and is not the string "undefined"
+          if (state.currentUser && state.currentUser.id && state.currentUser.id !== 'undefined') {
             fetchData();
           }
       }, intervalTime); 
@@ -250,7 +254,6 @@ function App() {
 
   const handleUpdateAdminCredentials = (email: string, password: string) => {
     if (!state.currentUser) return;
-    // For now, this calls the same update user endpoint.
     handleAdminUpdateUser(state.currentUser.id, { email, password });
   };
 
@@ -323,6 +326,26 @@ function App() {
               <div className="text-center text-white">
                   <Loader2 size={48} className="animate-spin mx-auto mb-4 text-amber-500" />
                   <p className="text-amber-100 font-medium">Connecting to Royal Hub Server...</p>
+              </div>
+          </div>
+      );
+  }
+
+  if (connectionError && !isAuth) {
+      return (
+          <div className="min-h-screen flex items-center justify-center bg-[#2c1810] p-6">
+              <div className="text-center bg-white p-8 rounded-xl shadow-2xl max-w-sm">
+                  <AlertTriangle size={64} className="mx-auto mb-4 text-red-500" />
+                  <h2 className="text-xl font-bold text-gray-800 mb-2">Connection Failed</h2>
+                  <p className="text-gray-600 mb-6 text-sm">
+                      Could not connect to the Royal Hub Backend. Please ensure the server is running.
+                  </p>
+                  <button 
+                    onClick={() => { setIsLoading(true); fetchData(); }}
+                    className="bg-amber-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-amber-700 transition-colors"
+                  >
+                      Retry Connection
+                  </button>
               </div>
           </div>
       );

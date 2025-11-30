@@ -16,7 +16,7 @@ const app = express();
 
 app.use(express.json({ limit: '50mb' }));
 
-// CORS Configuration: Allow all origins to ensure Frontend (Vercel) can access Backend (Render)
+// CORS Configuration
 app.use(cors({
     origin: '*', 
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -62,10 +62,6 @@ mongoose.connection.on('disconnected', () => {
     console.log('MongoDB disconnected');
 });
 
-mongoose.connection.on('connected', () => {
-    console.log('MongoDB connected');
-});
-
 // Routes
 app.use("/api/auth", authRoute);
 app.use("/api/products", productRoute);
@@ -75,6 +71,12 @@ app.use("/api/admin", adminRoute);
 
 app.get('/', (req, res) => {
     res.send("Royal Hub API is running. Status: Healthy.");
+});
+
+// Global Error Handler for uncaught route errors
+app.use((err, req, res, next) => {
+    console.error("Unhandled Server Error:", err.stack);
+    res.status(500).json({ message: "Internal Server Error", error: err.message });
 });
 
 const PORT = process.env.PORT || 5000;

@@ -3,14 +3,24 @@ import express from 'express';
 import User from '../models/User.js';
 import Product from '../models/Product.js';
 import Settings from '../models/Settings.js';
+import mongoose from 'mongoose';
 
 const router = express.Router();
 
+// Middleware to validate Object IDs
+const validateId = (req, res, next) => {
+    const id = req.params.id || req.body.userId;
+    if (!id || id === 'undefined' || id === 'null' || !mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: "Invalid User ID provided" });
+    }
+    next();
+};
+
 // Get User Data
-router.get('/:id', async (req, res) => {
+router.get('/:id', validateId, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
-    if(!user) return res.status(404).json("User not found");
+    if(!user) return res.status(404).json({ message: "User not found" });
     
     const { password, ...others } = user._doc;
     const formattedUser = {
@@ -22,12 +32,13 @@ router.get('/:id', async (req, res) => {
     
     res.status(200).json(formattedUser);
   } catch (err) {
+    console.error(err);
     res.status(500).json(err);
   }
 });
 
 // Invest
-router.post('/invest', async (req, res) => {
+router.post('/invest', validateId, async (req, res) => {
     const { userId, productId } = req.body;
     
     try {
@@ -35,8 +46,8 @@ router.post('/invest', async (req, res) => {
         const product = await Product.findById(productId);
         const settings = await Settings.findOne() || { referralBonusPercentage: 5 };
 
-        if (!user || !product) return res.status(404).json("User or Product not found");
-        if (user.balance < product.price) return res.status(400).json("Insufficient balance");
+        if (!user || !product) return res.status(404).json({ message: "User or Product not found" });
+        if (user.balance < product.price) return res.status(400).json({ message: "Insufficient balance" });
 
         // 1. Deduct Balance
         user.balance -= product.price;
@@ -83,20 +94,21 @@ router.post('/invest', async (req, res) => {
         }
 
         await user.save();
-        res.status(200).json("Investment successful");
+        res.status(200).json({ message: "Investment successful" });
 
     } catch (err) {
+        console.error(err);
         res.status(500).json(err);
     }
 });
 
 // Claim Daily Income
-router.post('/claim', async (req, res) => {
+router.post('/claim', validateId, async (req, res) => {
     const { userId } = req.body;
     
     try {
         const user = await User.findById(userId);
-        if (!user) return res.status(404).json("User not found");
+        if (!user) return res.status(404).json({ message: "User not found" });
 
         let totalClaim = 0;
         const now = new Date();
@@ -125,10 +137,11 @@ router.post('/claim', async (req, res) => {
             await user.save();
             res.status(200).json({ message: "Claim successful", amount: totalClaim });
         } else {
-            res.status(400).json("Nothing to claim yet");
+            res.status(400).json({ message: "Nothing to claim yet" });
         }
 
     } catch (err) {
+        console.error(err);
         res.status(500).json(err);
     }
 });

@@ -22,11 +22,16 @@ router.get('/', async (req, res) => {
 // Add Product (Admin)
 router.post('/', async (req, res) => {
   try {
-    const newProduct = new Product(req.body);
+    // Remove the 'id' field if sent by frontend, let MongoDB handle _id
+    const { id, ...productData } = req.body;
+    
+    const newProduct = new Product(productData);
     const savedProduct = await newProduct.save();
+    
     res.status(201).json({ ...savedProduct._doc, id: savedProduct._id.toString() });
   } catch (err) {
-    res.status(500).json(err);
+    console.error("Add Product Error:", err);
+    res.status(500).json({ message: "Failed to add product", error: err.message });
   }
 });
 

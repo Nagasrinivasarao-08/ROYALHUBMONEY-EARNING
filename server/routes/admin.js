@@ -3,13 +3,13 @@ import express from 'express';
 import User from '../models/User.js';
 import Settings from '../models/Settings.js';
 import Product from '../models/Product.js';
+import mongoose from 'mongoose';
 
 const router = express.Router();
 
 // Get All Users (Admin)
 router.get('/users', async (req, res) => {
     try {
-        // Sort by registration date descending (Newest first)
         const users = await User.find().sort({ registeredAt: -1 });
         const formatted = users.map(u => ({
             ...u._doc,
@@ -29,7 +29,7 @@ router.put('/users/:id', async (req, res) => {
         const { balance, password } = req.body;
         const updates = {};
         if (balance !== undefined) updates.balance = balance;
-        if (password !== undefined) updates.password = password; // Should hash in prod
+        if (password !== undefined) updates.password = password; 
 
         await User.findByIdAndUpdate(req.params.id, { $set: updates });
         res.status(200).json("User updated");
@@ -40,21 +40,26 @@ router.put('/users/:id', async (req, res) => {
 
 // Approve/Reject Transaction
 router.post('/transaction/:userId/:txId', async (req, res) => {
-    const { action } = req.body; // 'approve' or 'reject'
+    const { action } = req.body;
+    const { userId, txId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) return res.status(400).json("Invalid User ID");
+    // txId in subdocument also has ObjectId format usually
     
     try {
-        const user = await User.findById(req.params.userId);
+        const user = await User.findById(userId);
         if (!user) return res.status(404).json("User not found");
 
-        const tx = user.transactions.id(req.params.txId);
-        if (!tx || tx.status !== 'pending') return res.status(400).json("Invalid transaction or not pending");
+        const tx = user.transactions.id(txId);
+        if (!tx) return res.status(404).json("Transaction not found");
+        
+        if (tx.status !== 'pending') return res.status(400).json("Transaction is not pending");
 
         if (action === 'approve') {
             tx.status = 'success';
             if (tx.type === 'recharge') {
                 user.balance += tx.amount;
             }
-            // If withdrawal, balance was already deducted, so just mark success
         } else if (action === 'reject') {
             tx.status = 'rejected';
             if (tx.type === 'withdrawal') {
@@ -66,6 +71,7 @@ router.post('/transaction/:userId/:txId', async (req, res) => {
         res.status(200).json("Transaction updated");
 
     } catch (err) {
+        console.error("Admin Tx Error:", err);
         res.status(500).json(err);
     }
 });
@@ -101,9 +107,8 @@ router.put('/settings', async (req, res) => {
 // Factory Reset
 router.post('/reset', async (req, res) => {
     try {
-        await User.deleteMany({ role: { $ne: 'admin' } }); // Keep admins
+        await User.deleteMany({ role: { $ne: 'admin' } }); 
         await Product.deleteMany({});
-        // Reset Admin Data
         const admins = await User.find({ role: 'admin' });
         for (let admin of admins) {
             admin.balance = 0;
