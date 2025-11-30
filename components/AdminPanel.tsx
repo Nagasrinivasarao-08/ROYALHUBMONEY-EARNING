@@ -184,7 +184,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleSettingsSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      onUpdateSettings(qrForm);
+      if (window.confirm("Are you sure you want to save these system settings?")) {
+        onUpdateSettings(qrForm);
+      }
   };
 
   const handleAdminCredsSubmit = (e: React.FormEvent) => {

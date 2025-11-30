@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
+
+import React, { useEffect, useState } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { Invest } from './components/Invest';
@@ -7,9 +8,9 @@ import { AdminPanel } from './components/AdminPanel';
 import { AIChat } from './components/AIChat';
 import { Auth } from './components/Auth';
 import { Referral } from './components/Referral';
-import { AppState, Product, User, Transaction, Investment, AppSettings } from './types';
-import { loadState, saveState, resetData } from './services/storage';
-import { CheckCircle, AlertTriangle, XCircle, Info } from 'lucide-react';
+import { AppState, Product, User, AppSettings } from './types';
+import { api } from './services/api';
+import { CheckCircle, AlertTriangle, XCircle, Info, Loader2 } from 'lucide-react';
 
 // --- Toast Notification System ---
 interface Toast {
@@ -27,10 +28,8 @@ function App() {
   });
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isAuth, setIsAuth] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  
-  // Ref to track if we need to save state (to avoid saving what we just polled)
-  const shouldSaveRef = useRef(false);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
       const id = Date.now();
@@ -40,415 +39,280 @@ function App() {
       }, 3000);
   };
 
-  // Initialize
-  useEffect(() => {
-    const loaded = loadState();
-    setState(loaded);
-    if (loaded.currentUser) {
-      setIsAuth(true);
-      if (loaded.currentUser.role === 'admin') {
-          setActiveTab('admin');
-      }
-    }
-  }, []);
+  // --- Data Fetching ---
 
-  // Real-time Polling & Sync
+  const fetchData = async () => {
+      try {
+          const data = await api.getInitialState(state.currentUser);
+          setState(prev => ({
+              ...prev,
+              ...data,
+              // If we are refreshing, keep the session logic consistent
+              currentUser: data.currentUser || prev.currentUser
+          }));
+      } catch (error) {
+          console.error("Failed to fetch data:", error);
+      } finally {
+          setIsLoading(false);
+      }
+  };
+
+  // Initial Load with Session Restore
   useEffect(() => {
-    // 1. Listen for cross-tab storage events
-    const handleStorageChange = (e: StorageEvent) => {
-        if (e.key && e.key.startsWith('investflow_db')) {
-            const newState = loadState();
-            // Only update if data actually changed to avoid jitters
-            if (JSON.stringify(newState) !== JSON.stringify(state)) {
-                setState(newState);
-                // If user was logged in but removed in another tab, log them out
-                if (state.currentUser && !newState.users.find(u => u.id === state.currentUser?.id)) {
-                    handleLogout();
-                }
+      const init = async () => {
+        const storedUserId = localStorage.getItem('royal_user_id');
+        let restoredUser = null;
+        
+        if (storedUserId) {
+            try {
+                // Attempt to restore session
+                restoredUser = await api.getUser(storedUserId);
+                setIsAuth(true);
+                if (restoredUser.role === 'admin') setActiveTab('admin');
+                showToast(`Welcome back, ${restoredUser.username}`, 'success');
+            } catch (err) {
+                // Session invalid
+                localStorage.removeItem('royal_user_id');
             }
         }
-    };
 
-    window.addEventListener('storage', handleStorageChange);
-
-    // 2. Poll every 2 seconds to ensure Admin sees new users immediately (even if event fails)
-    const intervalId = setInterval(() => {
-        // Only poll if we haven't made local changes that are pending save
-        if (!shouldSaveRef.current) {
-            const latestState = loadState();
-            setState(prevState => {
-                // Deep comparison to avoid unnecessary re-renders
-                if (JSON.stringify(latestState.users) !== JSON.stringify(prevState.users) ||
-                    JSON.stringify(latestState.products) !== JSON.stringify(prevState.products) ||
-                    JSON.stringify(latestState.settings) !== JSON.stringify(prevState.settings)) {
-                    
-                    // Preserve current user session but update data
-                    let updatedCurrentUser = prevState.currentUser 
-                        ? latestState.users.find(u => u.id === prevState.currentUser!.id) || null
-                        : null;
-
-                    return {
-                        ...latestState,
-                        currentUser: updatedCurrentUser
-                    };
-                }
-                return prevState;
+        try {
+            // Fetch initial state using the restored user context
+            const data = await api.getInitialState(restoredUser);
+            setState({ 
+                ...data, 
+                currentUser: restoredUser // Ensure currentUser is set from the restore attempt
             });
+        } catch (error) {
+            console.error("Init failed:", error);
+        } finally {
+            setIsLoading(false);
         }
-    }, 2000);
-
-    return () => {
-        window.removeEventListener('storage', handleStorageChange);
-        clearInterval(intervalId);
-    };
+      };
+      init();
   }, []);
 
-  // Persistence - Only save when we initiate a change
+  // Poll for updates (Real-time feel)
   useEffect(() => {
-      if (shouldSaveRef.current) {
-          saveState(state);
-          shouldSaveRef.current = false;
+      if (!isAuth) return;
+
+      // Adaptive Polling: Admins need faster updates (2s) to see new users/orders.
+      // Regular users can poll slower (5s) to save bandwidth.
+      const isAdmin = state.currentUser?.role === 'admin';
+      const intervalTime = isAdmin ? 2000 : 5000;
+
+      const interval = setInterval(() => {
+          fetchData();
+      }, intervalTime); 
+      return () => clearInterval(interval);
+  }, [isAuth, state.currentUser?.role, state.currentUser?.id]);
+
+  // --- Auth Handlers ---
+
+  const handleLogin = async (email: string, password: string) => {
+      try {
+          const user = await api.login(email, password);
+          
+          // Save session
+          localStorage.setItem('royal_user_id', user.id);
+          
+          setState(prev => ({ ...prev, currentUser: user }));
+          setIsAuth(true);
+          showToast(`Welcome back, ${user.username}!`, 'success');
+          
+          if (user.role === 'admin') {
+              setActiveTab('admin');
+              // Immediately fetch admin data
+              await fetchData(); 
+          } else {
+              setActiveTab('dashboard');
+          }
+      } catch (err: any) {
+          throw new Error(err.message || 'Login failed');
       }
-  }, [state]);
-
-  // Helper wrapper to update state and trigger save
-  const updateStateAndSave = (updater: (prev: AppState) => AppState) => {
-      shouldSaveRef.current = true;
-      setState(updater);
   };
 
-  // Helpers to update a specific user safely
-  const updateUser = (userId: string, updates: Partial<User>) => {
-      updateStateAndSave(prev => {
-          const updatedUsers = prev.users.map(u => u.id === userId ? { ...u, ...updates } : u);
-          const updatedCurrentUser = prev.currentUser?.id === userId ? { ...prev.currentUser, ...updates } : prev.currentUser;
-          return {
-              ...prev,
-              users: updatedUsers,
-              currentUser: updatedCurrentUser
-          };
-      });
-  };
+  const handleRegister = async (data: any) => {
+      try {
+          const user = await api.register(data);
+          
+          // Save session
+          localStorage.setItem('royal_user_id', user.id);
 
-  const handleLogin = (user: User) => {
-      // Always get fresh user data from state
-      const freshUser = state.users.find(u => u.id === user.id) || user;
-      updateStateAndSave(prev => ({ ...prev, currentUser: freshUser }));
-      setIsAuth(true);
-      showToast(`Welcome back, ${freshUser.username}!`, 'success');
-      
-      if (freshUser.role === 'admin') {
-          setActiveTab('admin');
-      } else {
+          setState(prev => ({ ...prev, currentUser: user }));
+          setIsAuth(true);
           setActiveTab('dashboard');
+          showToast('Registration successful! Welcome to Royal Hub.', 'success');
+      } catch (err: any) {
+          throw new Error(err.message || 'Registration failed');
       }
-  };
-
-  const handleRegister = (newUser: User) => {
-      updateStateAndSave(prev => ({ 
-          ...prev, 
-          users: [...prev.users, newUser],
-          currentUser: newUser 
-      }));
-      setIsAuth(true);
-      setActiveTab('dashboard');
-      showToast('Registration successful! Welcome to Royal Hub.', 'success');
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('royal_user_id');
     setIsAuth(false);
-    updateStateAndSave(prev => ({ ...prev, currentUser: null }));
+    setState(prev => ({ ...prev, currentUser: null }));
     setActiveTab('dashboard');
     showToast('Logged out successfully.', 'info');
   };
 
-  // --- Transactions ---
+  // --- User Actions ---
 
-  const handleRecharge = (amount: number) => {
+  const handleInvest = async (product: Product) => {
     if (!state.currentUser) return;
-    const newTx: Transaction = {
-      id: Date.now().toString(),
-      type: 'recharge',
-      amount,
-      date: new Date().toISOString(),
-      status: 'pending',
-      userId: state.currentUser.id
-    };
-    
-    const updatedUser = {
-        ...state.currentUser,
-        transactions: [...state.currentUser.transactions, newTx]
-    };
-    updateUser(state.currentUser.id, updatedUser);
-    showToast('Recharge submitted! Pending Admin approval.', 'success');
-  };
-
-  const handleWithdraw = (amount: number, details: { method: 'upi' | 'bank', info: string }) => {
-    if (!state.currentUser) return;
-    const newTx: Transaction = {
-      id: Date.now().toString(),
-      type: 'withdrawal',
-      amount,
-      date: new Date().toISOString(),
-      status: 'pending',
-      userId: state.currentUser.id,
-      withdrawalDetails: {
-          method: details.method,
-          details: details.info
-      }
-    };
-
-    const updatedUser = {
-        ...state.currentUser,
-        balance: state.currentUser.balance - amount,
-        transactions: [...state.currentUser.transactions, newTx]
-    };
-    updateUser(state.currentUser.id, updatedUser);
-    showToast('Withdrawal request submitted!', 'success');
-  };
-
-  const handleInvest = (product: Product) => {
-    if (!state.currentUser) return;
-    if (state.currentUser.balance < product.price) {
-        showToast('Insufficient balance!', 'error');
-        return;
-    }
-
-    // Check for potential referral bonus before update for UI feedback
-    const isFirstInvestment = state.currentUser.investments.length === 0;
-    const hasReferrer = !!state.currentUser.referredBy;
-
-    updateStateAndSave(prev => {
-        const currentUser = prev.currentUser!;
-        
-        // Create Snapshot of Product to persist terms (even if admin changes/deletes product later)
-        const productSnapshot = { ...product };
-
-        const newInvestment: Investment = {
-            id: Date.now().toString(),
-            productId: product.id,
-            purchaseDate: new Date().toISOString(),
-            lastClaimDate: new Date().toISOString(),
-            claimedAmount: 0,
-            productSnapshot: productSnapshot
-        };
-
-        const newTx: Transaction = {
-            id: Date.now().toString(),
-            type: 'investment',
-            amount: product.price,
-            date: new Date().toISOString(),
-            status: 'success',
-            userId: currentUser.id
-        };
-
-        let updatedCurrentUser = {
-            ...currentUser,
-            balance: currentUser.balance - product.price,
-            investments: [...currentUser.investments, newInvestment],
-            transactions: [...currentUser.transactions, newTx]
-        };
-
-        let updatedReferrer = null;
-        const bonusPercentage = prev.settings.referralBonusPercentage ?? 5; // Default to 5% if not set
-
-        // Referral Logic: Auto-Add Bonus on FIRST investment only
-        if (currentUser.investments.length === 0 && currentUser.referredBy) {
-            const referrer = prev.users.find(u => u.referralCode === currentUser.referredBy);
-            if (referrer) {
-                const bonusAmount = product.price * (bonusPercentage / 100);
-                const bonusTx: Transaction = {
-                    id: Date.now().toString() + '-ref',
-                    type: 'referral',
-                    amount: bonusAmount,
-                    date: new Date().toISOString(),
-                    status: 'success',
-                    userId: referrer.id
-                };
-
-                updatedReferrer = {
-                    ...referrer,
-                    balance: referrer.balance + bonusAmount,
-                    transactions: [...referrer.transactions, bonusTx]
-                };
-            }
-        }
-
-        // Map over users to apply updates
-        const updatedUsers = prev.users.map(u => {
-            if (u.id === currentUser.id) return updatedCurrentUser;
-            if (updatedReferrer && u.id === updatedReferrer.id) return updatedReferrer;
-            return u;
-        });
-
-        return {
-            ...prev,
-            users: updatedUsers,
-            currentUser: updatedCurrentUser
-        };
-    });
-
-    setActiveTab('dashboard');
-    showToast(`Successfully invested in ${product.name}!`, 'success');
-    
-    if (isFirstInvestment && hasReferrer) {
-        showToast('Referral bonus automatically applied to your inviter!', 'success');
+    try {
+        await api.invest(state.currentUser.id, product.id);
+        showToast(`Successfully invested in ${product.name}!`, 'success');
+        await fetchData(); // Refresh balance and portfolio
+    } catch (err: any) {
+        showToast(err.message || 'Investment failed', 'error');
     }
   };
 
-  const handleClaim = () => {
+  const handleClaim = async () => {
     if (!state.currentUser) return;
-    let totalClaim = 0;
-    const now = new Date().toISOString();
-    
-    const updatedInvestments = state.currentUser.investments.map(inv => {
-        // Use Snapshot first for accuracy, or fallback to current product list
-        const product = inv.productSnapshot || state.products.find(p => p.id === inv.productId);
-        
-        if(!product) return inv; // Should not happen with snapshot
+    try {
+        const res = await api.claim(state.currentUser.id);
+        showToast(`Collected ₹${res.amount.toFixed(2)} profit!`, 'success');
+        await fetchData();
+    } catch (err: any) {
+        showToast(err.message || 'Claim failed', 'error'); // Likely "Nothing to claim yet"
+    }
+  };
 
-        const lastClaim = new Date(inv.lastClaimDate).getTime();
-        const currentTime = new Date().getTime();
-        const INTERVAL = 24 * 60 * 60 * 1000; // 24 Hours
+  const handleRecharge = async (amount: number) => {
+    if (!state.currentUser) return;
+    try {
+        await api.recharge(state.currentUser.id, amount);
+        showToast('Recharge submitted! Pending Admin approval.', 'success');
+        await fetchData();
+    } catch (err: any) {
+        showToast(err.message || 'Recharge failed', 'error');
+    }
+  };
 
-        if (currentTime - lastClaim >= INTERVAL) {
-            totalClaim += product.dailyIncome;
-            return { ...inv, lastClaimDate: now, claimedAmount: inv.claimedAmount + product.dailyIncome };
-        }
-        return inv;
-    });
-
-    if (totalClaim > 0) {
-        const newTx: Transaction = {
-            id: Date.now().toString(),
-            type: 'income',
-            amount: totalClaim,
-            date: now,
-            status: 'success',
-            userId: state.currentUser.id
-        };
-
-        const updatedUser = {
-            ...state.currentUser,
-            balance: state.currentUser.balance + totalClaim,
-            investments: updatedInvestments,
-            transactions: [...state.currentUser.transactions, newTx]
-        };
-        updateUser(state.currentUser.id, updatedUser);
-        showToast(`Collected ₹${totalClaim.toFixed(2)} profit!`, 'success');
-    } else {
-        showToast('Nothing to claim yet. Please wait for the cycle to complete.', 'info');
+  const handleWithdraw = async (amount: number, details: { method: 'upi' | 'bank', info: string }) => {
+    if (!state.currentUser) return;
+    try {
+        await api.withdraw(state.currentUser.id, amount, details);
+        showToast('Withdrawal request submitted!', 'success');
+        await fetchData();
+    } catch (err: any) {
+        showToast(err.message || 'Withdrawal failed', 'error');
     }
   };
 
   // --- Admin Functions ---
 
-  const handleAddProduct = (product: Product) => {
-    updateStateAndSave(prev => ({ ...prev, products: [...prev.products, product] }));
-    showToast('Product added successfully', 'success');
+  const handleAddProduct = async (product: Product) => {
+    try {
+        await api.addProduct(product);
+        showToast('Product added successfully', 'success');
+        await fetchData();
+    } catch (err: any) {
+        showToast(err.message, 'error');
+    }
   };
 
-  const handleDeleteProduct = (id: string) => {
-      updateStateAndSave(prev => ({ ...prev, products: prev.products.filter(p => p.id !== id) }));
-      showToast('Product deleted', 'info');
+  const handleDeleteProduct = async (id: string) => {
+      try {
+        await api.deleteProduct(id);
+        showToast('Product deleted', 'info');
+        await fetchData();
+      } catch (err: any) {
+          showToast(err.message, 'error');
+      }
   };
 
-  const handleUpdateSettings = (newSettings: AppSettings) => {
-      updateStateAndSave(prev => ({ ...prev, settings: newSettings }));
-      showToast('System settings updated', 'success');
+  const handleUpdateSettings = async (newSettings: AppSettings) => {
+      try {
+        await api.updateSettings(newSettings);
+        showToast('System settings updated', 'success');
+        await fetchData();
+      } catch (err: any) {
+          showToast(err.message, 'error');
+      }
   };
 
   const handleUpdateAdminCredentials = (email: string, password: string) => {
-    if (!state.currentUser || state.currentUser.role !== 'admin') return;
-
-    if (state.users.some(u => u.email === email && u.id !== state.currentUser?.id)) {
-        showToast('Email already in use.', 'error');
-        return;
-    }
-
-    updateUser(state.currentUser.id, { email, password });
-    showToast('Admin credentials updated.', 'success');
+    if (!state.currentUser) return;
+    // For now, this calls the same update user endpoint.
+    handleAdminUpdateUser(state.currentUser.id, { email, password });
   };
 
-  // Direct User Management (Admin Edit)
-  const handleAdminUpdateUser = (userId: string, updates: Partial<User>) => {
-      updateUser(userId, updates);
-      showToast('User updated successfully.', 'success');
+  const handleAdminUpdateUser = async (userId: string, updates: Partial<User>) => {
+      try {
+        await api.updateUser(userId, updates);
+        showToast('User updated successfully.', 'success');
+        await fetchData();
+      } catch (err: any) {
+          showToast(err.message, 'error');
+      }
   };
 
-  const handleApproveRecharge = (userId: string, txId: string) => {
-    const user = state.users.find(u => u.id === userId);
-    if (!user) return;
-    
-    const tx = user.transactions.find(t => t.id === txId);
-    if (!tx || tx.status !== 'pending') return;
-
-    const updatedTx = user.transactions.map(t => 
-        t.id === txId ? { ...t, status: 'success' } : t
-    ) as Transaction[];
-
-    updateUser(userId, { 
-        balance: user.balance + tx.amount,
-        transactions: updatedTx 
-    });
-    showToast('Recharge approved.', 'success');
+  const handleApproveRecharge = async (userId: string, txId: string) => {
+      try {
+        await api.handleTransaction(userId, txId, 'approve');
+        showToast('Recharge approved.', 'success');
+        await fetchData();
+      } catch (err: any) {
+          showToast(err.message, 'error');
+      }
   };
 
-  const handleRejectRecharge = (userId: string, txId: string) => {
-    const user = state.users.find(u => u.id === userId);
-    if (!user) return;
-    
-    const tx = user.transactions.find(t => t.id === txId);
-    if (!tx || tx.status !== 'pending') return;
-
-    const updatedTx = user.transactions.map(t => 
-        t.id === txId ? { ...t, status: 'rejected' } : t
-    ) as Transaction[];
-
-    updateUser(userId, { transactions: updatedTx });
-    showToast('Recharge rejected.', 'info');
+  const handleRejectRecharge = async (userId: string, txId: string) => {
+      try {
+        await api.handleTransaction(userId, txId, 'reject');
+        showToast('Recharge rejected.', 'info');
+        await fetchData();
+      } catch (err: any) {
+          showToast(err.message, 'error');
+      }
   };
 
-  const handleApproveWithdrawal = (userId: string, txId: string) => {
-      const user = state.users.find(u => u.id === userId);
-      if (!user) return;
-      
-      const tx = user.transactions.find(t => t.id === txId);
-      if (!tx || tx.status !== 'pending') return;
-
-      const updatedTx = user.transactions.map(t => 
-          t.id === txId ? { ...t, status: 'success' } : t
-      ) as Transaction[];
-
-      updateUser(userId, { transactions: updatedTx });
-      showToast('Withdrawal approved.', 'success');
+  const handleApproveWithdrawal = async (userId: string, txId: string) => {
+      try {
+        await api.handleTransaction(userId, txId, 'approve');
+        showToast('Withdrawal approved.', 'success');
+        await fetchData();
+      } catch (err: any) {
+          showToast(err.message, 'error');
+      }
   };
 
-  const handleRejectWithdrawal = (userId: string, txId: string) => {
-      const user = state.users.find(u => u.id === userId);
-      if (!user) return;
-
-      const tx = user.transactions.find(t => t.id === txId);
-      if (!tx || tx.status !== 'pending') return;
-
-      const updatedTx = user.transactions.map(t => 
-        t.id === txId ? { ...t, status: 'rejected' } : t
-      ) as Transaction[];
-
-      updateUser(userId, { 
-          balance: user.balance + tx.amount,
-          transactions: updatedTx 
-      });
-      showToast('Withdrawal rejected and refunded.', 'info');
+  const handleRejectWithdrawal = async (userId: string, txId: string) => {
+      try {
+        await api.handleTransaction(userId, txId, 'reject');
+        showToast('Withdrawal rejected and refunded.', 'info');
+        await fetchData();
+      } catch (err: any) {
+          showToast(err.message, 'error');
+      }
   };
 
-  const handleResetData = () => {
-      const defaultState = resetData();
-      updateStateAndSave(() => defaultState);
-      setIsAuth(false);
-      showToast('System Factory Reset Complete.', 'success');
+  const handleResetData = async () => {
+      try {
+        await api.resetData();
+        showToast('System Factory Reset Complete.', 'success');
+        setIsAuth(false);
+        localStorage.removeItem('royal_user_id');
+        setState(prev => ({ ...prev, currentUser: null, users: [], products: [] }));
+      } catch (err: any) {
+          showToast(err.message, 'error');
+      }
   };
 
+
+  if (isLoading) {
+      return (
+          <div className="min-h-screen flex items-center justify-center bg-[#2c1810]">
+              <div className="text-center text-white">
+                  <Loader2 size={48} className="animate-spin mx-auto mb-4 text-amber-500" />
+                  <p className="text-amber-100 font-medium">Connecting to Royal Hub Server...</p>
+              </div>
+          </div>
+      );
+  }
 
   return (
     <>
@@ -471,7 +335,7 @@ function App() {
         </div>
 
         {!isAuth ? (
-            <Auth onLogin={handleLogin} onRegister={handleRegister} users={state.users} />
+            <Auth onLogin={handleLogin} onRegister={handleRegister} />
         ) : (
             <Layout 
                 activeTab={activeTab} 

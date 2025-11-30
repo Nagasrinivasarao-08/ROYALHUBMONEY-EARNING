@@ -4,14 +4,14 @@ import { User } from '../types';
 import { Check, X, AlertCircle, Shield, User as UserIcon, Lock, Users, Key } from 'lucide-react';
 
 interface AuthProps {
-  onLogin: (user: User) => void;
-  onRegister: (newUser: User) => void;
-  users: User[];
+  onLogin: (email: string, password: string) => Promise<void>;
+  onRegister: (data: any) => Promise<void>;
+  // users prop removed as we verify against server now
 }
 
 type AuthMode = 'login' | 'register' | 'admin';
 
-export const Auth: React.FC<AuthProps> = ({ onLogin, onRegister, users }) => {
+export const Auth: React.FC<AuthProps> = ({ onLogin, onRegister }) => {
   const [mode, setMode] = useState<AuthMode>('login');
   const [formData, setFormData] = useState({
     username: '',
@@ -21,6 +21,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onRegister, users }) => {
     referralCode: ''
   });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [referralStatus, setReferralStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
 
   // Check for referral code in URL on mount
@@ -30,90 +31,40 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onRegister, users }) => {
     if (ref) {
       setMode('register');
       setFormData(prev => ({ ...prev, referralCode: ref }));
-      
-      // Validate immediate if users are loaded
-      if (users.length > 0) {
-        const isValid = users.some(u => u.referralCode === ref);
-        setReferralStatus(isValid ? 'valid' : 'invalid');
-      }
+      // We can't validate immediately without an API call, so we leave it 'idle' or strictly 'valid' visually
+      setReferralStatus('valid'); 
     }
-  }, [users]);
+  }, []);
 
-  const authenticateUser = (isLogin: boolean) => {
-    const user = users.find(u => u.email === formData.email && u.password === formData.password);
-    
-    if (user) {
-      if (mode === 'admin' && user.role !== 'admin') {
-          setError('This account does not have admin privileges.');
-          return;
-      }
-      onLogin(user);
-    } else {
-      setError('Invalid email or password');
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
-    if (mode === 'login' || mode === 'admin') {
-      authenticateUser(true);
-    } else {
-      // Register
-      if (!formData.username || !formData.email || !formData.password) {
-        setError('All fields are required');
-        return;
-      }
-      if (formData.password !== formData.confirmPassword) {
-        setError('Passwords do not match');
-        return;
-      }
-      if (users.some(u => u.email === formData.email)) {
-        setError('Email already registered');
-        return;
-      }
+    try {
+        if (mode === 'login' || mode === 'admin') {
+            await onLogin(formData.email, formData.password);
+        } else {
+            // Register
+            if (!formData.username || !formData.email || !formData.password) {
+                throw new Error('All fields are required');
+            }
+            if (formData.password !== formData.confirmPassword) {
+                throw new Error('Passwords do not match');
+            }
 
-      // Validate Referral Code if provided
-      if (formData.referralCode.trim() !== '') {
-        const referrerExists = users.some(u => u.referralCode === formData.referralCode.trim());
-        if (!referrerExists) {
-          setError('Invalid Referral Code. Please check or leave empty.');
-          return;
+            await onRegister({
+                username: formData.username,
+                email: formData.email,
+                password: formData.password,
+                referralCode: formData.referralCode || undefined
+            });
         }
-      }
-
-      const refCode = formData.username.substring(0, 4).toUpperCase() + Math.floor(Math.random() * 1000);
-
-      const newUser: User = {
-        id: Date.now().toString(),
-        username: formData.username,
-        email: formData.email,
-        password: formData.password,
-        role: 'user',
-        balance: 0,
-        referralCode: refCode,
-        referredBy: formData.referralCode.trim(),
-        investments: [],
-        transactions: [],
-        registeredAt: new Date().toISOString()
-      };
-
-      onRegister(newUser);
+    } catch (err: any) {
+        setError(err.message || 'Authentication failed');
+    } finally {
+        setLoading(false);
     }
-  };
-
-  const handleReferralChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const code = e.target.value.toUpperCase();
-    setFormData({ ...formData, referralCode: code });
-
-    if (code.trim() === '') {
-      setReferralStatus('idle');
-      return;
-    }
-
-    const isValid = users.some(u => u.referralCode === code.trim());
-    setReferralStatus(isValid ? 'valid' : 'invalid');
   };
 
   const fillAdminCredentials = () => {
@@ -150,19 +101,19 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onRegister, users }) => {
         {/* Tab Switcher */}
         <div className="flex border-b border-gray-200">
             <button 
-                onClick={() => setMode('login')}
+                onClick={() => { setMode('login'); setError(''); }}
                 className={`flex-1 py-3 text-sm font-medium transition-colors ${mode === 'login' ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50' : 'text-gray-500 hover:text-gray-700'}`}
             >
                 Login
             </button>
             <button 
-                onClick={() => setMode('register')}
+                onClick={() => { setMode('register'); setError(''); }}
                 className={`flex-1 py-3 text-sm font-medium transition-colors ${mode === 'register' ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50' : 'text-gray-500 hover:text-gray-700'}`}
             >
                 Register
             </button>
             <button 
-                onClick={() => setMode('admin')}
+                onClick={() => { setMode('admin'); setError(''); }}
                 className={`flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center ${mode === 'admin' ? 'text-[#2c1810] border-b-2 border-[#2c1810] bg-gray-100' : 'text-gray-500 hover:text-gray-700'}`}
             >
                 <Shield size={14} className="mr-1" /> Admin
@@ -231,25 +182,11 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onRegister, users }) => {
                         <input
                         type="text"
                         value={formData.referralCode}
-                        onChange={handleReferralChange}
-                        className={`w-full p-3 border rounded-lg focus:ring-2 outline-none pr-10 ${
-                            referralStatus === 'valid' ? 'border-green-500 focus:ring-green-200' :
-                            referralStatus === 'invalid' ? 'border-red-500 focus:ring-red-200' :
-                            'border-gray-300 focus:ring-amber-500'
-                        }`}
+                        onChange={(e) => setFormData({ ...formData, referralCode: e.target.value.toUpperCase() })}
+                        className="w-full p-3 border rounded-lg focus:ring-2 outline-none border-gray-300 focus:ring-amber-500"
                         placeholder="Enter referral code"
                         />
-                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                            {referralStatus === 'valid' && <Check size={20} className="text-green-500" />}
-                            {referralStatus === 'invalid' && <X size={20} className="text-red-500" />}
-                        </div>
                     </div>
-                    {referralStatus === 'valid' && <p className="text-[10px] text-green-600 mt-1 flex items-center"><Check size={10} className="mr-1"/> Code valid</p>}
-                    {referralStatus === 'invalid' && (
-                        <p className="text-[10px] text-red-500 mt-1 flex items-center">
-                            <AlertCircle size={10} className="mr-1"/> Code not found. (Hint: Try "ADMIN")
-                        </p>
-                    )}
                 </div>
                 </>
             )}
@@ -262,10 +199,12 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onRegister, users }) => {
 
             <button
                 type="submit"
-                className={`w-full text-white py-3 rounded-lg font-bold transition-colors uppercase tracking-wide shadow-lg mt-4 ${
+                disabled={loading}
+                className={`w-full text-white py-3 rounded-lg font-bold transition-colors uppercase tracking-wide shadow-lg mt-4 disabled:opacity-70 flex justify-center items-center ${
                     mode === 'admin' ? 'bg-[#2c1810] hover:bg-black' : 'bg-amber-600 hover:bg-amber-700'
                 }`}
             >
+                {loading ? <span className="animate-spin mr-2">⟳</span> : null}
                 {mode === 'login' ? 'Login' : mode === 'register' ? 'Register Account' : 'Access Admin Panel'}
             </button>
             </form>
