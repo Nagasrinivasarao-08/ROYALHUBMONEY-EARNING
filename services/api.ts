@@ -2,10 +2,14 @@
 import { AppState, Product, User, AppSettings, Transaction } from '../types';
 
 // PRODUCTION SETUP:
-// When deploying to Vercel/Netlify, you MUST add an Environment Variable named 'VITE_API_URL'.
-// Value should be your deployed backend URL (e.g., https://royal-hub-backend.onrender.com/api).
-// If not set, it defaults to localhost for development.
-const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000/api';
+// We automatically detect if running locally or in production.
+// If VITE_API_URL is set in environment variables, it takes priority.
+// Otherwise, we fallback to localhost (dev) or the Render URL (prod).
+
+const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const API_URL = (import.meta as any).env?.VITE_API_URL || 
+                (isLocal ? 'http://localhost:5000/api' : 'https://royal-hub-backend.onrender.com/api');
 
 // Helper for Fetch
 const request = async (endpoint: string, options: RequestInit = {}) => {
@@ -24,7 +28,7 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
         
         // Custom error message for connection refusal (Server down)
         if (error.message === 'Failed to fetch') {
-            throw new Error("Cannot connect to server. Is 'npm run server' running?");
+            throw new Error("Cannot connect to server. Please check your internet connection or server status.");
         }
         throw error;
     }
