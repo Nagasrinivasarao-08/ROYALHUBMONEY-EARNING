@@ -2,12 +2,12 @@ import { GoogleGenAI } from "@google/genai";
 import { Product } from "../types";
 
 const getClient = () => {
-  // Check for API key in process.env (Standard) or import.meta.env (Vite fallback)
-  // Note: The system instruction strictly requires process.env.API_KEY, but we ensure robustness here.
-  const apiKey = process.env.API_KEY;
+  // Use import.meta.env for Vite/Vercel, fallback to process.env for standard Node compliance
+  // Cast import.meta to any to avoid type errors if vite/client types are missing
+  const apiKey = (import.meta as any).env?.VITE_API_KEY || (typeof process !== 'undefined' ? process.env.API_KEY : undefined);
   
   if (!apiKey) {
-    console.error("Gemini API Key is missing. Please set process.env.API_KEY in your environment variables (e.g., .env file).");
+    console.error("Gemini API Key is missing. Please set VITE_API_KEY in your Vercel environment variables.");
     return null;
   }
   return new GoogleGenAI({ apiKey });
@@ -15,7 +15,7 @@ const getClient = () => {
 
 export const analyzeProduct = async (product: Product): Promise<string> => {
   const client = getClient();
-  if (!client) return "AI Service Unavailable: Please configure your API_KEY in .env settings.";
+  if (!client) return "AI Service Unavailable: Please configure your API_KEY.";
 
   try {
     const prompt = `
