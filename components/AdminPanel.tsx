@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { Product, User, AppSettings, Transaction } from '../types';
 import { Plus, Trash2, Users, ShoppingBag, ArrowDownLeft, Settings, Check, X, QrCode, DollarSign, AlertCircle, Clock, ShieldAlert, Image, Building, Lock, AlertTriangle, Edit } from 'lucide-react';
 
@@ -84,6 +85,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     purchaseLimit: 2,
     image: '' // Start empty to show placeholder
   });
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Settings Form State
   const [qrForm, setQrForm] = useState(settings);
@@ -145,6 +147,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     };
     onAddProduct(product);
     setNewProduct({ name: 'ROYAL-', price: 0, dailyIncome: 0, days: 365, purchaseLimit: 2, description: '', image: '' });
+    // Reset file input
+    if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -221,11 +227,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (!editingUser) return;
       
       const updates: Partial<User> = {};
+      let confirmMessage = "";
       
       if (editForm.balance !== '') {
           const newBalance = parseFloat(editForm.balance);
           if (!isNaN(newBalance)) {
               updates.balance = newBalance;
+              if (newBalance !== editingUser.balance) {
+                  confirmMessage = `Are you sure you want to update the balance for ${editingUser.username} to ₹${newBalance}?`;
+              }
           }
       }
 
@@ -234,6 +244,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
 
       if (Object.keys(updates).length > 0) {
+          if (confirmMessage) {
+              if (!window.confirm(confirmMessage)) return;
+          }
           onUpdateUser(editingUser.id, updates);
       }
       setEditingUser(null);
@@ -590,6 +603,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         </div>
                         <div className="flex-1">
                             <input 
+                                ref={fileInputRef}
                                 type="file" 
                                 accept="image/*"
                                 onChange={handleImageUpload}

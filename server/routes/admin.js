@@ -9,7 +9,8 @@ const router = express.Router();
 // Get All Users (Admin)
 router.get('/users', async (req, res) => {
     try {
-        const users = await User.find();
+        // Sort by registration date descending (Newest first)
+        const users = await User.find().sort({ registeredAt: -1 });
         const formatted = users.map(u => ({
             ...u._doc,
             id: u._id.toString(),

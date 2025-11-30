@@ -14,10 +14,20 @@ const API_URL = (import.meta as any).env?.VITE_API_URL ||
 // Helper for Fetch
 const request = async (endpoint: string, options: RequestInit = {}) => {
     try {
+        // Add cache-busting headers to force fresh data
+        const headers = {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            ...options.headers
+        };
+
         const res = await fetch(`${API_URL}${endpoint}`, {
-            headers: { 'Content-Type': 'application/json' },
-            ...options
+            ...options,
+            headers
         });
+        
         if (!res.ok) {
             const err = await res.json();
             throw new Error(err.message || "API Request Failed");
@@ -55,13 +65,14 @@ export const api = {
         let users: User[] = [];
         let refreshedUser = null;
 
-        if (currentUser) {
+        if (currentUser && currentUser.id && currentUser.id !== 'undefined') {
             // If logged in, refresh user data
             try {
                 refreshedUser = await request(`/users/${currentUser.id}`);
                 
                 // If Admin, fetch all users for dashboard
-                if (currentUser.role === 'admin') {
+                // We double check the role from the FRESH user object, not the stale state
+                if (refreshedUser.role === 'admin') {
                     users = await request('/admin/users');
                 } else {
                     users = [refreshedUser];
@@ -81,7 +92,12 @@ export const api = {
     },
 
     // User Actions
-    getUser: (userId: string) => request(`/users/${userId}`),
+    getUser: (userId: string) => {
+        if (!userId || userId === 'undefined' || userId === 'null') {
+            return Promise.reject(new Error("Invalid User ID"));
+        }
+        return request(`/users/${userId}`);
+    },
 
     invest: (userId: string, productId: string) => request('/users/invest', {
         method: 'POST',

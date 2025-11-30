@@ -63,7 +63,8 @@ function App() {
         const storedUserId = localStorage.getItem('royal_user_id');
         let restoredUser = null;
         
-        if (storedUserId) {
+        // Robust check for corrupt storage
+        if (storedUserId && storedUserId !== 'undefined' && storedUserId !== 'null') {
             try {
                 // Attempt to restore session
                 restoredUser = await api.getUser(storedUserId);
@@ -72,6 +73,12 @@ function App() {
                 showToast(`Welcome back, ${restoredUser.username}`, 'success');
             } catch (err) {
                 // Session invalid
+                console.warn("Session restore failed, clearing storage");
+                localStorage.removeItem('royal_user_id');
+            }
+        } else {
+            // Clear invalid data if present
+            if (localStorage.getItem('royal_user_id')) {
                 localStorage.removeItem('royal_user_id');
             }
         }
@@ -102,7 +109,10 @@ function App() {
       const intervalTime = isAdmin ? 2000 : 5000;
 
       const interval = setInterval(() => {
-          fetchData();
+          // Only poll if we have a valid user
+          if (state.currentUser && state.currentUser.id) {
+            fetchData();
+          }
       }, intervalTime); 
       return () => clearInterval(interval);
   }, [isAuth, state.currentUser?.role, state.currentUser?.id]);
@@ -113,6 +123,8 @@ function App() {
       try {
           const user = await api.login(email, password);
           
+          if (!user || !user.id) throw new Error("Invalid response from server");
+
           // Save session
           localStorage.setItem('royal_user_id', user.id);
           
@@ -136,6 +148,8 @@ function App() {
       try {
           const user = await api.register(data);
           
+          if (!user || !user.id) throw new Error("Invalid response from server");
+
           // Save session
           localStorage.setItem('royal_user_id', user.id);
 

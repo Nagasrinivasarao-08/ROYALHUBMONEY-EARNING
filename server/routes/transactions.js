@@ -12,8 +12,13 @@ router.post('/', async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json("User not found");
 
-    if (type === 'withdrawal' && user.balance < amount) {
-        return res.status(400).json("Insufficient balance");
+    if (type === 'withdrawal') {
+        if (amount < 200) {
+            return res.status(400).json("Minimum withdrawal amount is 200");
+        }
+        if (user.balance < amount) {
+            return res.status(400).json("Insufficient balance");
+        }
     }
 
     const newTx = {

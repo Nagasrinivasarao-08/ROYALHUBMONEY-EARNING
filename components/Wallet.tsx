@@ -63,6 +63,10 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
   const handleWithdrawSubmit = () => {
       const val = Number(withdrawAmount);
       if (!withdrawAmount || isNaN(val) || val <= 0) return;
+      if (val < 200) {
+          alert("Minimum withdrawal amount is ₹200");
+          return;
+      }
       if (val > user.balance) return;
       if (!withdrawInfo.trim()) return;
 
@@ -266,7 +270,7 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
                     <div>
                          <div className="flex justify-between items-end mb-1">
                             <label className="block text-xs font-bold text-gray-700 uppercase">Amount (₹)</label>
-                            <span className="text-xs text-amber-600 font-semibold">Max: ₹{user.balance.toFixed(2)}</span>
+                            <span className="text-xs text-amber-600 font-semibold">Min: ₹200 | Max: ₹{user.balance.toFixed(2)}</span>
                         </div>
                         <input
                             type="number"
@@ -333,10 +337,14 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
 
                     <button
                         onClick={handleWithdrawSubmit}
-                        disabled={!withdrawAmount || Number(withdrawAmount) <= 0 || Number(withdrawAmount) > user.balance || !withdrawInfo.trim()}
+                        disabled={!withdrawAmount || Number(withdrawAmount) <= 0 || Number(withdrawAmount) < 200 || Number(withdrawAmount) > user.balance || !withdrawInfo.trim()}
                         className="w-full bg-[#2c1810] hover:bg-gray-800 text-white py-3 rounded-lg font-bold shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                         {Number(withdrawAmount) > user.balance ? 'Insufficient Balance' : 'Confirm Withdrawal'}
+                         {Number(withdrawAmount) > user.balance 
+                            ? 'Insufficient Balance' 
+                            : Number(withdrawAmount) > 0 && Number(withdrawAmount) < 200 
+                                ? 'Min Withdrawal ₹200'
+                                : 'Confirm Withdrawal'}
                     </button>
                      <p className="text-[10px] text-center text-gray-400">
                         Processed within 24 hours. Admin approval required.
