@@ -1,4 +1,5 @@
 
+
 import mongoose from 'mongoose';
 
 const TransactionSchema = new mongoose.Schema({
@@ -16,7 +17,8 @@ const TransactionSchema = new mongoose.Schema({
   },
   withdrawalDetails: {
     method: String,
-    details: String
+    details: String,
+    info: String // Added backup field
   }
 });
 

@@ -10,6 +10,9 @@ router.post('/', async (req, res) => {
   const { userId, type, amount, withdrawalDetails } = req.body;
   
   console.log(`[Transaction] Processing ${type} request. Amount: ${amount}, UserId: ${userId}`);
+  if (withdrawalDetails) {
+      console.log(`[Transaction] Withdrawal Details:`, JSON.stringify(withdrawalDetails));
+  }
 
   // 1. Validate User ID
   if (!userId || typeof userId !== 'string' || !mongoose.Types.ObjectId.isValid(userId)) {

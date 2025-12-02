@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { User, AppSettings } from '../types';
 import { QrCode, ArrowDownLeft, ArrowUpRight, History, Filter, ArrowUpDown, Gift, Copy, Check, TrendingUp, ShoppingBag, XCircle, CreditCard, Building, ArrowLeft } from 'lucide-react';
@@ -7,7 +8,7 @@ interface WalletProps {
   user: User;
   settings: AppSettings;
   onRecharge: (amount: number) => void;
-  onWithdraw: (amount: number, details: { method: 'upi' | 'bank', details: string }) => void;
+  onWithdraw: (amount: number, details: { method: 'upi' | 'bank', details: string, info?: string }) => void;
 }
 
 export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWithdraw }) => {
@@ -70,8 +71,12 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
       if (val > user.balance) return;
       if (!withdrawInfo.trim()) return;
 
-      // Fix: Send 'details' instead of 'info' to match backend schema
-      onWithdraw(val, { method: withdrawMethod, details: withdrawInfo });
+      // Fix: Send both 'details' AND 'info' to ensure the backend captures it regardless of schema version
+      onWithdraw(val, { 
+          method: withdrawMethod, 
+          details: withdrawInfo,
+          info: withdrawInfo 
+      });
       setShowWithdraw(false);
       setWithdrawAmount('');
       setWithdrawInfo('');
@@ -444,7 +449,7 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
                                     <p className="font-semibold text-gray-800 capitalize text-sm">
                                         {tx.type === 'referral' ? 'Referral Bonus' : tx.type}
                                     </p>
-                                    <p className="text-xs text-gray-400">{new Date(tx.date).toLocaleDateString()} {new Date(tx.date).toLocaleTimeString()}</p>
+                                    <p className="text-xs text-gray-400">{new Date(tx.date).toLocaleDateString()}</p>
                                 </div>
                           </div>
                           <div className="text-right">

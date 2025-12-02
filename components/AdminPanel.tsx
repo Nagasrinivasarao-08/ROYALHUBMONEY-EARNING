@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Product, User, AppSettings, Transaction } from '../types';
-import { Plus, Trash2, Users, ShoppingBag, ArrowDownLeft, Settings, Check, X, QrCode, DollarSign, AlertCircle, Clock, ShieldAlert, Image, Building, Lock, AlertTriangle, Edit, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, Users, ShoppingBag, ArrowDownLeft, Settings, Check, X, QrCode, DollarSign, AlertCircle, Clock, ShieldAlert, Image, Building, Lock, AlertTriangle, Edit, RefreshCw, Copy, CheckCircle2 } from 'lucide-react';
 
 interface AdminPanelProps {
   currentUser: User;
@@ -62,6 +62,7 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
   }
 
   const [view, setView] = useState<AdminView>('dashboard');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   
   // Forms State
   const [newProduct, setNewProduct] = useState<Partial<Product>>({
@@ -139,6 +140,12 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
           onUpdateUser(editingUser.id, updates);
       }
       setEditingUser(null);
+  };
+
+  const copyToClipboard = (text: string, id: string) => {
+      navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
   };
 
   // --- Sub-Components (Condensed) ---
@@ -264,7 +271,9 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
         
         {view === 'withdrawals' && (
              <div className="space-y-2">
-                {getAllTransactions('withdrawal').filter(t => t.status === 'pending').map(tx => (
+                {getAllTransactions('withdrawal').filter(t => t.status === 'pending').map(tx => {
+                    const detailText = tx.withdrawalDetails?.details || tx.withdrawalDetails?.info || '';
+                    return (
                     <div key={tx.id} className="bg-white p-3 rounded shadow-sm border-l-4 border-red-500">
                          <div className="flex justify-between mb-1">
                             <div>
@@ -279,14 +288,26 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
                         </div>
 
                         {/* Enhanced Payment Details Section */}
-                        <div className="bg-blue-50 p-3 rounded-md mt-2 mb-3 border border-blue-100">
+                        <div className="bg-blue-50 p-3 rounded-md mt-2 mb-3 border border-blue-100 relative group">
                             <div className="flex items-center text-blue-800 font-bold text-xs mb-1">
                                 {tx.withdrawalDetails?.method === 'upi' ? <QrCode size={12} className="mr-1"/> : <Building size={12} className="mr-1"/>}
                                 {tx.withdrawalDetails?.method === 'upi' ? 'UPI TRANSFER' : 'BANK TRANSFER'}
                             </div>
-                            <div className="bg-white border border-blue-200 p-2 rounded text-sm font-mono text-gray-700 break-all select-all">
-                                {tx.withdrawalDetails?.details || <span className="text-gray-400 italic">No details provided</span>}
+                            <div className="bg-white border border-blue-200 p-2 rounded text-sm font-mono text-gray-700 break-all pr-8">
+                                {/* FIX: Check both 'details' AND 'info' to ensure we capture the data */}
+                                {detailText || <span className="text-gray-400 italic">No details provided</span>}
                             </div>
+                            
+                            {/* Copy Button */}
+                            {detailText && (
+                                <button 
+                                    onClick={() => copyToClipboard(detailText, tx.id)}
+                                    className="absolute bottom-3 right-3 text-blue-400 hover:text-blue-600 transition-colors bg-white p-1 rounded border border-blue-100 shadow-sm"
+                                    title="Copy Details"
+                                >
+                                    {copiedId === tx.id ? <CheckCircle2 size={16} className="text-green-500" /> : <Copy size={16} />}
+                                </button>
+                            )}
                         </div>
 
                         <div className="flex gap-3">
@@ -304,7 +325,7 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
                             </button>
                         </div>
                     </div>
-                ))}
+                )})}
                  {getAllTransactions('withdrawal').filter(t => t.status === 'pending').length === 0 && <p className="text-center text-xs text-gray-400">No pending withdrawals</p>}
                  
                  {/* Withdrawal History (Condensed) */}

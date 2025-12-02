@@ -32,7 +32,8 @@ export interface Transaction {
   userId?: string; // Link transaction to a specific user
   withdrawalDetails?: {
       method: 'upi' | 'bank';
-      details: string; // e.g., "user@upi" or "Acct: 123, IFSC: ABC"
+      details: string; // The primary field
+      info?: string;   // Backup field for compatibility
   };
 }
 

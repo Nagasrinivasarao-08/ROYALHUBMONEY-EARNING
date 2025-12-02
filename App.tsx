@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useState } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
@@ -204,7 +205,7 @@ function App() {
     }
   };
 
-  const handleWithdraw = async (amount: number, details: { method: 'upi' | 'bank', details: string }) => {
+  const handleWithdraw = async (amount: number, details: any) => {
     if (!state.currentUser) return;
     try {
         await api.withdraw(state.currentUser.id, amount, details);
