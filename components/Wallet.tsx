@@ -7,7 +7,7 @@ interface WalletProps {
   user: User;
   settings: AppSettings;
   onRecharge: (amount: number) => void;
-  onWithdraw: (amount: number, details: { method: 'upi' | 'bank', info: string }) => void;
+  onWithdraw: (amount: number, details: { method: 'upi' | 'bank', details: string }) => void;
 }
 
 export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWithdraw }) => {
@@ -70,7 +70,8 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
       if (val > user.balance) return;
       if (!withdrawInfo.trim()) return;
 
-      onWithdraw(val, { method: withdrawMethod, info: withdrawInfo });
+      // Fix: Send 'details' instead of 'info' to match backend schema
+      onWithdraw(val, { method: withdrawMethod, details: withdrawInfo });
       setShowWithdraw(false);
       setWithdrawAmount('');
       setWithdrawInfo('');
@@ -111,8 +112,6 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
   const formattedAmount = amount && !isNaN(Number(amount)) ? Number(amount).toFixed(2) : '0.00';
   
   // Logic to determine QR Display
-  // If UPI ID is present, we generate a dynamic QR code that includes the amount.
-  // Otherwise, we fallback to the static image uploaded by admin.
   const getQrUrl = () => {
       if (settings.upiId && Number(amount) > 0) {
           const upiLink = `upi://pay?pa=${settings.upiId}&pn=RoyalHub&am=${formattedAmount}&cu=INR&tn=Recharge`;

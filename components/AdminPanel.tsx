@@ -214,7 +214,6 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
             </div>
         )}
 
-        {/* Simplified other views for brevity - Logic remains the same as previous file but ensures 'users' prop is fresh */}
         {view === 'products' && (
             <div className="space-y-4">
                  <div className="bg-white p-4 rounded-lg shadow-sm border border-amber-200">
@@ -252,6 +251,7 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
                             <span className="font-bold text-sm">{tx.username}</span>
                             <span className="font-bold text-green-600">+₹{tx.amount}</span>
                         </div>
+                         <div className="text-xs text-gray-400 mb-2">Current Bal: ₹{tx.currentBalance.toFixed(2)}</div>
                         <div className="flex gap-2 mt-2">
                             <button onClick={()=>onApproveRecharge(tx.userId!, tx.id)} className="flex-1 bg-green-600 text-white py-1 rounded text-xs">Approve</button>
                             <button onClick={()=>onRejectRecharge(tx.userId!, tx.id)} className="flex-1 bg-red-100 text-red-600 py-1 rounded text-xs">Reject</button>
@@ -266,18 +266,65 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
              <div className="space-y-2">
                 {getAllTransactions('withdrawal').filter(t => t.status === 'pending').map(tx => (
                     <div key={tx.id} className="bg-white p-3 rounded shadow-sm border-l-4 border-red-500">
-                         <div className="flex justify-between">
-                            <span className="font-bold text-sm">{tx.username}</span>
-                            <span className="font-bold text-amber-600">₹{tx.amount}</span>
+                         <div className="flex justify-between mb-1">
+                            <div>
+                                <h4 className="font-bold text-base text-gray-900">{tx.username}</h4>
+                                <p className="text-[10px] text-gray-400">Req: {new Date(tx.date).toLocaleString()}</p>
+                                <p className="text-[10px] text-gray-500">Current Balance: ₹{tx.currentBalance.toFixed(2)}</p>
+                            </div>
+                            <div className="text-right">
+                                <span className="block font-bold text-xl text-amber-600">₹{tx.amount}</span>
+                                <span className="bg-yellow-100 text-yellow-800 text-[10px] px-2 py-0.5 rounded font-bold">PENDING REVIEW</span>
+                            </div>
                         </div>
-                        <div className="bg-blue-50 p-2 rounded mt-2 text-xs font-mono mb-2 break-all">{tx.withdrawalDetails?.details}</div>
-                        <div className="flex gap-2">
-                            <button onClick={()=>onApproveWithdrawal(tx.userId!, tx.id)} className="flex-1 bg-green-600 text-white py-1 rounded text-xs">Pay</button>
-                            <button onClick={()=>onRejectWithdrawal(tx.userId!, tx.id)} className="flex-1 bg-red-100 text-red-600 py-1 rounded text-xs">Reject</button>
+
+                        {/* Enhanced Payment Details Section */}
+                        <div className="bg-blue-50 p-3 rounded-md mt-2 mb-3 border border-blue-100">
+                            <div className="flex items-center text-blue-800 font-bold text-xs mb-1">
+                                {tx.withdrawalDetails?.method === 'upi' ? <QrCode size={12} className="mr-1"/> : <Building size={12} className="mr-1"/>}
+                                {tx.withdrawalDetails?.method === 'upi' ? 'UPI TRANSFER' : 'BANK TRANSFER'}
+                            </div>
+                            <div className="bg-white border border-blue-200 p-2 rounded text-sm font-mono text-gray-700 break-all select-all">
+                                {tx.withdrawalDetails?.details || <span className="text-gray-400 italic">No details provided</span>}
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={()=>onApproveWithdrawal(tx.userId!, tx.id)} 
+                                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded font-bold text-sm shadow-sm flex items-center justify-center transition-colors"
+                            >
+                                <Check size={16} className="mr-1" /> Approve & Paid
+                            </button>
+                            <button 
+                                onClick={()=>onRejectWithdrawal(tx.userId!, tx.id)} 
+                                className="flex-1 bg-red-100 hover:bg-red-200 text-red-700 py-2 rounded font-bold text-sm shadow-sm flex items-center justify-center transition-colors border border-red-200"
+                            >
+                                <X size={16} className="mr-1" /> Reject & Refund
+                            </button>
                         </div>
                     </div>
                 ))}
                  {getAllTransactions('withdrawal').filter(t => t.status === 'pending').length === 0 && <p className="text-center text-xs text-gray-400">No pending withdrawals</p>}
+                 
+                 {/* Withdrawal History (Condensed) */}
+                 <div className="mt-8 pt-4 border-t border-gray-200">
+                    <h4 className="font-bold text-sm text-gray-700 mb-3 flex items-center"><Clock size={16} className="mr-1"/> History</h4>
+                    <div className="space-y-2 opacity-75">
+                         {getAllTransactions('withdrawal').filter(t => t.status !== 'pending').slice(0, 5).map(tx => (
+                            <div key={tx.id} className="bg-gray-50 p-2 rounded flex justify-between items-center text-xs">
+                                <div>
+                                    <div className="font-bold">{tx.username}</div>
+                                    <div className="text-gray-400">{new Date(tx.date).toLocaleDateString()}</div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="font-bold">₹{tx.amount}</div>
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] ${tx.status === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{tx.status.toUpperCase()}</span>
+                                </div>
+                            </div>
+                         ))}
+                    </div>
+                 </div>
             </div>
         )}
 

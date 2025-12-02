@@ -48,50 +48,43 @@ function App() {
           setState(prev => ({
               ...prev,
               ...data,
-              // If we are refreshing, keep the session logic consistent
               currentUser: data.currentUser || prev.currentUser
           }));
           setConnectionError(false);
       } catch (error) {
           console.error("Failed to fetch data:", error);
-          if (!connectionError) setConnectionError(true); // Set error state to stop loading spinner loops if needed
+          if (!connectionError) setConnectionError(true);
       } finally {
           setIsLoading(false);
       }
   };
 
-  // Initial Load with Session Restore
   useEffect(() => {
       const init = async () => {
         const storedUserId = localStorage.getItem('royal_user_id');
         let restoredUser = null;
         
-        // Robust check for corrupt storage
         if (storedUserId && storedUserId !== 'undefined' && storedUserId !== 'null') {
             try {
-                // Attempt to restore session
                 restoredUser = await api.getUser(storedUserId);
                 setIsAuth(true);
                 if (restoredUser.role === 'admin') setActiveTab('admin');
                 showToast(`Welcome back, ${restoredUser.username}`, 'success');
             } catch (err) {
-                // Session invalid
                 console.warn("Session restore failed, clearing storage");
                 localStorage.removeItem('royal_user_id');
             }
         } else {
-            // Clear invalid data if present
             if (localStorage.getItem('royal_user_id')) {
                 localStorage.removeItem('royal_user_id');
             }
         }
 
         try {
-            // Fetch initial state using the restored user context
             const data = await api.getInitialState(restoredUser);
             setState({ 
                 ...data, 
-                currentUser: restoredUser // Ensure currentUser is set from the restore attempt
+                currentUser: restoredUser 
             });
             setConnectionError(false);
         } catch (error) {
@@ -104,24 +97,19 @@ function App() {
       init();
   }, []);
 
-  // Poll for updates (Real-time feel)
   useEffect(() => {
       if (!isAuth) return;
 
-      // Adaptive Polling
       const isAdmin = state.currentUser?.role === 'admin';
       const intervalTime = isAdmin ? 2000 : 5000;
 
       const interval = setInterval(() => {
-          // Robust check: Ensure ID exists and is not the string "undefined"
           if (state.currentUser && state.currentUser.id && state.currentUser.id !== 'undefined') {
             fetchData();
           }
       }, intervalTime); 
       return () => clearInterval(interval);
   }, [isAuth, state.currentUser?.role, state.currentUser?.id]);
-
-  // --- Auth Handlers ---
 
   const handleLogin = async (email: string, password: string) => {
       try {
@@ -132,7 +120,6 @@ function App() {
               throw new Error("Login failed: Invalid server response");
           }
 
-          // Save session
           localStorage.setItem('royal_user_id', user.id);
           
           setState(prev => ({ ...prev, currentUser: user }));
@@ -141,7 +128,6 @@ function App() {
           
           if (user.role === 'admin') {
               setActiveTab('admin');
-              // Immediately fetch admin data
               await fetchData(); 
           } else {
               setActiveTab('dashboard');
@@ -160,7 +146,6 @@ function App() {
               throw new Error("Registration failed: Invalid server response");
           }
 
-          // Save session
           localStorage.setItem('royal_user_id', user.id);
 
           setState(prev => ({ ...prev, currentUser: user }));
@@ -180,14 +165,12 @@ function App() {
     showToast('Logged out successfully.', 'info');
   };
 
-  // --- User Actions ---
-
   const handleInvest = async (product: Product) => {
     if (!state.currentUser) return;
     try {
         await api.invest(state.currentUser.id, product.id);
         showToast(`Successfully invested in ${product.name}!`, 'success');
-        await fetchData(); // Refresh balance and portfolio
+        await fetchData(); 
     } catch (err: any) {
         showToast(err.message || 'Investment failed', 'error');
     }
@@ -200,7 +183,7 @@ function App() {
         showToast(`Collected ₹${res.amount.toFixed(2)} profit!`, 'success');
         await fetchData();
     } catch (err: any) {
-        showToast(err.message || 'Claim failed', 'error'); // Likely "Nothing to claim yet"
+        showToast(err.message || 'Claim failed', 'error'); 
     }
   };
 
@@ -219,7 +202,8 @@ function App() {
     }
   };
 
-  const handleWithdraw = async (amount: number, details: { method: 'upi' | 'bank', info: string }) => {
+  // Updated signature to use 'details' instead of 'info'
+  const handleWithdraw = async (amount: number, details: { method: 'upi' | 'bank', details: string }) => {
     if (!state.currentUser) return;
     try {
         await api.withdraw(state.currentUser.id, amount, details);
@@ -229,8 +213,6 @@ function App() {
         showToast(err.message || 'Withdrawal failed', 'error');
     }
   };
-
-  // --- Admin Functions ---
 
   const handleAddProduct = async (product: Product) => {
     try {
