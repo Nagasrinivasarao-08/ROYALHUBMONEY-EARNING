@@ -4,6 +4,7 @@ import { AppState, Product, User, AppSettings, Transaction } from '../types';
 // PRODUCTION SETUP:
 const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
+// Cast import.meta to any to avoid TypeScript errors with 'env'
 const API_URL = (import.meta as any).env?.VITE_API_URL || 
                 (isLocal ? 'http://localhost:5000/api' : 'https://royal-hub-backend.onrender.com/api');
 
@@ -12,8 +13,7 @@ console.log("API Service Initialized. Target:", API_URL);
 // Helper for Fetch
 const request = async (endpoint: string, options: RequestInit = {}) => {
     try {
-        // CACHE BUSTING: Add a timestamp to every GET request to prevent the browser 
-        // from showing old data (fixes Admin Dashboard not updating).
+        // CACHE BUSTING: Add a timestamp to every GET request
         let url = `${API_URL}${endpoint}`;
         if (!options.method || options.method === 'GET') {
             const separator = url.includes('?') ? '&' : '?';
@@ -22,7 +22,6 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
 
         const headers = {
             'Content-Type': 'application/json',
-            // Explicitly tell server/browser not to cache
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
             'Expires': '0',
@@ -69,19 +68,20 @@ export const api = {
 
     // Data Fetching
     getInitialState: async (currentUser: User | null): Promise<AppState> => {
-        // Fetch products and settings publically
+        // Fetch products and settings publicly
         const products = await request('/products');
         const settings = await request('/admin/settings');
         
         let users: User[] = [];
         let refreshedUser = null;
 
-        if (currentUser && currentUser.id && currentUser.id !== 'undefined') {
+        // STRICT CHECK: Only attempt to fetch user if ID is valid string and NOT "undefined"
+        if (currentUser && currentUser.id && currentUser.id !== 'undefined' && currentUser.id !== 'null') {
             try {
                 // Refresh specific user data
                 refreshedUser = await request(`/users/${currentUser.id}`);
                 
-                // If Admin, fetch ALL users immediately to ensure dashboard is live
+                // If Admin, fetch ALL users immediately
                 if (refreshedUser.role === 'admin') {
                     users = await request('/admin/users');
                 } else {
@@ -104,7 +104,9 @@ export const api = {
 
     // User Actions
     getUser: (userId: string) => {
-        if (!userId || userId === 'undefined') return Promise.reject(new Error("Invalid ID"));
+        if (!userId || userId === 'undefined' || userId === 'null') {
+            return Promise.reject(new Error("Invalid User ID"));
+        }
         return request(`/users/${userId}`);
     },
 
@@ -119,7 +121,7 @@ export const api = {
     }),
 
     recharge: (userId: string, amount: number) => {
-        if (!userId) return Promise.reject(new Error("User ID missing"));
+        if (!userId || userId === 'undefined') return Promise.reject(new Error("User ID missing"));
         return request('/transactions', {
             method: 'POST',
             body: JSON.stringify({ userId, type: 'recharge', amount })

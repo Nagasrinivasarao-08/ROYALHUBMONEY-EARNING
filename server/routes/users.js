@@ -10,8 +10,13 @@ const router = express.Router();
 // Middleware to validate Object IDs
 const validateId = (req, res, next) => {
     const id = req.params.id || req.body.userId;
-    if (!id || id === 'undefined' || id === 'null' || !mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({ message: "Invalid User ID provided" });
+    // CRITICAL FIX: Explicitly check for "undefined" or "null" strings before Mongoose validation
+    if (!id || id === 'undefined' || id === 'null') {
+        return res.status(400).json({ message: "Invalid User ID provided (Missing or Undefined)" });
+    }
+    
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: "Invalid User ID format" });
     }
     next();
 };
@@ -32,8 +37,8 @@ router.get('/:id', validateId, async (req, res) => {
     
     res.status(200).json(formattedUser);
   } catch (err) {
-    console.error(err);
-    res.status(500).json(err);
+    console.error("Get User Error:", err);
+    res.status(500).json({ message: "Failed to fetch user data" });
   }
 });
 

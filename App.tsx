@@ -64,6 +64,7 @@ function App() {
         const storedUserId = localStorage.getItem('royal_user_id');
         let restoredUser = null;
         
+        // Safety: Check if stored ID is strictly valid
         if (storedUserId && storedUserId !== 'undefined' && storedUserId !== 'null') {
             try {
                 restoredUser = await api.getUser(storedUserId);
@@ -71,11 +72,13 @@ function App() {
                 if (restoredUser.role === 'admin') setActiveTab('admin');
                 showToast(`Welcome back, ${restoredUser.username}`, 'success');
             } catch (err) {
-                console.warn("Session restore failed, clearing storage");
+                console.warn("Session restore failed or invalid ID, clearing storage");
                 localStorage.removeItem('royal_user_id');
             }
         } else {
+            // Clean up corrupt storage
             if (localStorage.getItem('royal_user_id')) {
+                console.log("Cleaning corrupt user ID from storage");
                 localStorage.removeItem('royal_user_id');
             }
         }
@@ -104,6 +107,7 @@ function App() {
       const intervalTime = isAdmin ? 2000 : 5000;
 
       const interval = setInterval(() => {
+          // Strictly ensure we have a valid user ID before polling
           if (state.currentUser && state.currentUser.id && state.currentUser.id !== 'undefined') {
             fetchData();
           }
@@ -115,9 +119,8 @@ function App() {
       try {
           const user = await api.login(email, password);
           
-          if (!user || !user.id) {
-              console.error("Invalid login response:", user);
-              throw new Error("Login failed: Invalid server response");
+          if (!user || !user.id || user.id === 'undefined') {
+              throw new Error("Login failed: Invalid server response (Missing ID)");
           }
 
           localStorage.setItem('royal_user_id', user.id);
@@ -141,9 +144,8 @@ function App() {
       try {
           const user = await api.register(data);
           
-          if (!user || !user.id) {
-              console.error("Invalid register response:", user);
-              throw new Error("Registration failed: Invalid server response");
+          if (!user || !user.id || user.id === 'undefined') {
+              throw new Error("Registration failed: Invalid server response (Missing ID)");
           }
 
           localStorage.setItem('royal_user_id', user.id);
@@ -202,7 +204,6 @@ function App() {
     }
   };
 
-  // Updated signature to use 'details' instead of 'info'
   const handleWithdraw = async (amount: number, details: { method: 'upi' | 'bank', details: string }) => {
     if (!state.currentUser) return;
     try {
