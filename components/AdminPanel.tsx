@@ -148,16 +148,30 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
       setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Helper to safely extract withdrawal details string regardless of structure
+  // ROBUST DATA PARSING: Handles Strings, Objects, and JSON Strings
   const getWithdrawalDetailsString = (details: any): string => {
       if (!details) return '';
-      if (typeof details === 'string') return details;
-      if (typeof details === 'object') {
-          // Fallback to JSON.stringify if specific fields are missing, but data exists
-          const val = details.details || details.info;
-          if (val) return val;
-          return JSON.stringify(details).replace(/["{}]/g, ''); // Show raw object content if keys don't match
+      
+      // If it's a simple string, it might be the detail OR a JSON string
+      if (typeof details === 'string') {
+          // Try to parse it as JSON first
+          try {
+              const parsed = JSON.parse(details);
+              if (parsed && typeof parsed === 'object') {
+                   return parsed.details || parsed.info || JSON.stringify(parsed).replace(/["{}]/g, '');
+              }
+          } catch (e) {
+              // Not JSON, just a string
+              return details;
+          }
+          return details;
       }
+      
+      // If it's already an object
+      if (typeof details === 'object') {
+          return details.details || details.info || JSON.stringify(details).replace(/["{}]/g, ''); 
+      }
+      
       return String(details);
   };
 
@@ -182,6 +196,14 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
                 <p className="text-2xl font-bold">{totalPendingWithdrawals}</p>
             </div>
           </div>
+          
+          {/* Environment Warning */}
+          {(typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) && (
+              <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200 text-xs text-yellow-800 flex items-center">
+                  <AlertTriangle size={16} className="mr-2" />
+                  <span><strong>Dev Mode:</strong> Connected to Local Backend. Data will persist in MongoDB.</span>
+              </div>
+          )}
       </div>
   );
 
@@ -309,7 +331,7 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
                                 {isUpi ? 'UPI TRANSFER' : 'BANK TRANSFER'}
                             </div>
                             <div className="bg-white border border-blue-200 p-2 rounded text-sm font-mono text-gray-700 break-all pr-8">
-                                {detailText || <span className="text-gray-400 italic">No details provided</span>}
+                                {detailText || <span className="text-red-400 italic font-bold">MISSING DATA ({JSON.stringify(tx.withdrawalDetails)})</span>}
                             </div>
                             
                             {/* Copy Button */}

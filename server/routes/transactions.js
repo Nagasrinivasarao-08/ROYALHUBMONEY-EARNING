@@ -43,12 +43,20 @@ router.post('/', async (req, res) => {
         }
     }
 
+    // DATA PERSISTENCE FIX:
+    // We convert the object to a string to GUARANTEE MongoDB saves it.
+    // It cannot drop a string.
+    let finalDetails = withdrawalDetails;
+    if (typeof withdrawalDetails === 'object') {
+        finalDetails = JSON.stringify(withdrawalDetails);
+    }
+
     const newTx = {
         type,
         amount: valAmount,
         status: 'pending',
         date: new Date(),
-        withdrawalDetails: withdrawalDetails || {} // Ensure it's not undefined
+        withdrawalDetails: finalDetails || "" 
     };
 
     // Transaction Logic
@@ -66,7 +74,7 @@ router.post('/', async (req, res) => {
     
     // Verify save
     const savedTx = user.transactions[user.transactions.length - 1];
-    console.log(`[Transaction] SAVED Transaction Data:`, JSON.stringify(savedTx));
+    console.log(`[Transaction] SAVED Transaction Data (Verifying Persistence):`, savedTx.withdrawalDetails);
     
     console.log(`[Transaction] Success: ${type} created for ${user.username}`);
     res.status(200).json(user);
