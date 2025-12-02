@@ -15,11 +15,8 @@ const TransactionSchema = new mongoose.Schema({
     enum: ['pending', 'success', 'failed', 'rejected'],
     default: 'success'
   },
-  withdrawalDetails: {
-    method: String,
-    details: String,
-    info: String // Added backup field
-  }
+  // CRITICAL FIX: Use Mixed type to ensure we capture ANY structure sent by frontend (details, info, legacy strings, etc.)
+  withdrawalDetails: { type: mongoose.Schema.Types.Mixed }
 });
 
 const InvestmentSchema = new mongoose.Schema({

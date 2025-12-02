@@ -148,6 +148,16 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
       setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // Helper to safely extract withdrawal details string regardless of structure
+  const getWithdrawalDetailsString = (details: any): string => {
+      if (!details) return '';
+      if (typeof details === 'string') return details;
+      if (typeof details === 'object') {
+          return details.details || details.info || JSON.stringify(details);
+      }
+      return String(details);
+  };
+
   // --- Sub-Components (Condensed) ---
   const DashboardView = () => (
       <div className="space-y-4">
@@ -272,7 +282,9 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
         {view === 'withdrawals' && (
              <div className="space-y-2">
                 {getAllTransactions('withdrawal').filter(t => t.status === 'pending').map(tx => {
-                    const detailText = tx.withdrawalDetails?.details || tx.withdrawalDetails?.info || '';
+                    const detailText = getWithdrawalDetailsString(tx.withdrawalDetails);
+                    const isUpi = tx.withdrawalDetails?.method === 'upi' || (typeof detailText === 'string' && detailText.includes('@'));
+                    
                     return (
                     <div key={tx.id} className="bg-white p-3 rounded shadow-sm border-l-4 border-red-500">
                          <div className="flex justify-between mb-1">
@@ -290,11 +302,11 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
                         {/* Enhanced Payment Details Section */}
                         <div className="bg-blue-50 p-3 rounded-md mt-2 mb-3 border border-blue-100 relative group">
                             <div className="flex items-center text-blue-800 font-bold text-xs mb-1">
-                                {tx.withdrawalDetails?.method === 'upi' ? <QrCode size={12} className="mr-1"/> : <Building size={12} className="mr-1"/>}
-                                {tx.withdrawalDetails?.method === 'upi' ? 'UPI TRANSFER' : 'BANK TRANSFER'}
+                                {isUpi ? <QrCode size={12} className="mr-1"/> : <Building size={12} className="mr-1"/>}
+                                {isUpi ? 'UPI TRANSFER' : 'BANK TRANSFER'}
                             </div>
                             <div className="bg-white border border-blue-200 p-2 rounded text-sm font-mono text-gray-700 break-all pr-8">
-                                {/* FIX: Check both 'details' AND 'info' to ensure we capture the data */}
+                                {/* FIX: Display the resolved detail string */}
                                 {detailText || <span className="text-gray-400 italic">No details provided</span>}
                             </div>
                             

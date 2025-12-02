@@ -69,13 +69,14 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
           return;
       }
       if (val > user.balance) return;
-      if (!withdrawInfo.trim()) return;
+      const cleanInfo = withdrawInfo.trim();
+      if (!cleanInfo) return;
 
       // Fix: Send both 'details' AND 'info' to ensure the backend captures it regardless of schema version
       onWithdraw(val, { 
           method: withdrawMethod, 
-          details: withdrawInfo,
-          info: withdrawInfo 
+          details: cleanInfo,
+          info: cleanInfo 
       });
       setShowWithdraw(false);
       setWithdrawAmount('');
