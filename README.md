@@ -53,10 +53,6 @@ A full-stack MERN (MongoDB, Express, React, Node.js) investment simulation platf
     npm run dev
     ```
 
-## Admin Access (Default)
-
-- **Email**: `srinivas@gmail.com`
-- **Password**: `srinivas@9121`
 
 ## Deployment
 
