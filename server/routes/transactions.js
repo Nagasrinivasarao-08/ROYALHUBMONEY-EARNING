@@ -11,7 +11,7 @@ router.post('/', async (req, res) => {
   
   console.log(`[Transaction] Processing ${type} request. Amount: ${amount}, UserId: ${userId}`);
   if (withdrawalDetails) {
-      console.log(`[Transaction] Withdrawal Details:`, JSON.stringify(withdrawalDetails));
+      console.log(`[Transaction] INCOMING Withdrawal Details:`, JSON.stringify(withdrawalDetails));
   }
 
   // 1. Validate User ID
@@ -48,7 +48,7 @@ router.post('/', async (req, res) => {
         amount: valAmount,
         status: 'pending',
         date: new Date(),
-        withdrawalDetails: withdrawalDetails || undefined
+        withdrawalDetails: withdrawalDetails || {} // Ensure it's not undefined
     };
 
     // Transaction Logic
@@ -58,7 +58,15 @@ router.post('/', async (req, res) => {
     // Note: Recharges don't add balance until approved by admin
 
     user.transactions.push(newTx);
+    
+    // Explicitly mark modified to ensure mixed types are saved
+    user.markModified('transactions'); 
+    
     await user.save();
+    
+    // Verify save
+    const savedTx = user.transactions[user.transactions.length - 1];
+    console.log(`[Transaction] SAVED Transaction Data:`, JSON.stringify(savedTx));
     
     console.log(`[Transaction] Success: ${type} created for ${user.username}`);
     res.status(200).json(user);

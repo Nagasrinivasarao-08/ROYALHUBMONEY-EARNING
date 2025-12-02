@@ -1,5 +1,4 @@
 
-
 import mongoose from 'mongoose';
 
 const TransactionSchema = new mongoose.Schema({
@@ -15,9 +14,9 @@ const TransactionSchema = new mongoose.Schema({
     enum: ['pending', 'success', 'failed', 'rejected'],
     default: 'success'
   },
-  // CRITICAL FIX: Use Mixed type to ensure we capture ANY structure sent by frontend (details, info, legacy strings, etc.)
+  // CRITICAL FIX: Use Mixed type. This allows ANY structure (Strings, Objects, etc.) to be saved.
   withdrawalDetails: { type: mongoose.Schema.Types.Mixed }
-});
+}, { strict: false }); // strict: false allows fields not defined in schema to be saved
 
 const InvestmentSchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },

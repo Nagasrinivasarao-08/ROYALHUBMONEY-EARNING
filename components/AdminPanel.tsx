@@ -153,7 +153,10 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
       if (!details) return '';
       if (typeof details === 'string') return details;
       if (typeof details === 'object') {
-          return details.details || details.info || JSON.stringify(details);
+          // Fallback to JSON.stringify if specific fields are missing, but data exists
+          const val = details.details || details.info;
+          if (val) return val;
+          return JSON.stringify(details).replace(/["{}]/g, ''); // Show raw object content if keys don't match
       }
       return String(details);
   };
@@ -306,7 +309,6 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
                                 {isUpi ? 'UPI TRANSFER' : 'BANK TRANSFER'}
                             </div>
                             <div className="bg-white border border-blue-200 p-2 rounded text-sm font-mono text-gray-700 break-all pr-8">
-                                {/* FIX: Display the resolved detail string */}
                                 {detailText || <span className="text-gray-400 italic">No details provided</span>}
                             </div>
                             
