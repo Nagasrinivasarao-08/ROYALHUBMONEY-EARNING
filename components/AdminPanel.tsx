@@ -39,7 +39,7 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
     onUpdateAdminCredentials,
     onResetData,
     onUpdateUser,
-    onRefresh // Injected from App.tsx via extra props (handled implicitly in App render)
+    onRefresh 
 }) => {
   // Security Check
   useEffect(() => {
@@ -148,27 +148,27 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
       setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // ROBUST DATA PARSING: Handles Strings, Objects, and JSON Strings
+  // ROBUST DISPLAY: Shows object content even if structure is weird
   const getWithdrawalDetailsString = (details: any): string => {
       if (!details) return '';
       
-      // If it's a simple string, it might be the detail OR a JSON string
+      // If it's a string, try to parse it (in case it's double-stringified)
       if (typeof details === 'string') {
-          // Try to parse it as JSON first
           try {
-              const parsed = JSON.parse(details);
-              if (parsed && typeof parsed === 'object') {
-                   return parsed.details || parsed.info || JSON.stringify(parsed).replace(/["{}]/g, '');
-              }
-          } catch (e) {
-              // Not JSON, just a string
+             if (details.startsWith('{')) {
+                 const parsed = JSON.parse(details);
+                 return parsed.details || parsed.info || JSON.stringify(parsed);
+             }
+             return details;
+          } catch(e) {
               return details;
           }
-          return details;
       }
       
-      // If it's already an object
+      // If it's an object, try to find the property
       if (typeof details === 'object') {
+          // If the object has 'details' or 'info', use it.
+          // Otherwise, stringify the whole object so we can SEE what's inside.
           return details.details || details.info || JSON.stringify(details).replace(/["{}]/g, ''); 
       }
       
@@ -211,7 +211,6 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
     <div className="pb-20">
         <div className="flex justify-between items-center mb-4">
             <h1 className="text-xl font-bold text-[#2c1810]">Admin Panel</h1>
-            {/* Manual Refresh Button */}
             <button 
                 onClick={() => window.location.reload()} 
                 className="bg-gray-200 p-2 rounded-full hover:bg-gray-300 transition-colors"
