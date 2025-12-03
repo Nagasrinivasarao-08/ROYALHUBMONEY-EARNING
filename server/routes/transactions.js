@@ -48,9 +48,9 @@ router.post('/', async (req, res) => {
         amount: valAmount,
         status: 'pending',
         date: new Date(),
-        // RAW OBJECT MODE: Save exactly what frontend sent. 
-        // The Schema 'Mixed' type handles this.
-        withdrawalDetails: withdrawalDetails || {}
+        // FORCE STRINGIFY: Convert object to string to guarantee MongoDB saves it.
+        // Mongoose sometimes drops nested Mixed objects, but it never drops strings.
+        withdrawalDetails: withdrawalDetails ? JSON.stringify(withdrawalDetails) : "{}"
     };
 
     // Transaction Logic
@@ -67,7 +67,7 @@ router.post('/', async (req, res) => {
     
     // Verify save
     const savedTx = user.transactions[user.transactions.length - 1];
-    console.log(`[Transaction] SAVED Transaction Data:`, JSON.stringify(savedTx.withdrawalDetails));
+    console.log(`[Transaction] SAVED Transaction Data:`, savedTx.withdrawalDetails);
     
     console.log(`[Transaction] Success: ${type} created for ${user.username}`);
     res.status(200).json(user);

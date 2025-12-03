@@ -148,31 +148,36 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
       setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // ROBUST DISPLAY: Shows object content even if structure is weird
+  // ROBUST DISPLAY: Shows object content even if structure is weird or stringified
   const getWithdrawalDetailsString = (details: any): string => {
       if (!details) return '';
       
-      // If it's a string, try to parse it (in case it's double-stringified)
+      let parsed = details;
+
+      // If it's a string that looks like JSON, try to parse it
       if (typeof details === 'string') {
-          try {
-             if (details.startsWith('{')) {
-                 const parsed = JSON.parse(details);
-                 return parsed.details || parsed.info || JSON.stringify(parsed);
-             }
-             return details;
-          } catch(e) {
+          if (details.trim().startsWith('{')) {
+              try {
+                  parsed = JSON.parse(details);
+              } catch (e) {
+                  return details; // Return raw string if parse fails
+              }
+          } else {
               return details;
           }
       }
       
-      // If it's an object, try to find the property
-      if (typeof details === 'object') {
-          // If the object has 'details' or 'info', use it.
-          // Otherwise, stringify the whole object so we can SEE what's inside.
-          return details.details || details.info || JSON.stringify(details).replace(/["{}]/g, ''); 
+      // If we have an object (either originally or parsed)
+      if (typeof parsed === 'object' && parsed !== null) {
+          // Priority: details -> info -> raw values
+          if (parsed.details) return parsed.details;
+          if (parsed.info) return parsed.info;
+          
+          // Fallback: If no known keys, return the raw JSON so admin can see SOMETHING
+          return JSON.stringify(parsed);
       }
       
-      return String(details);
+      return String(parsed);
   };
 
   // --- Sub-Components (Condensed) ---

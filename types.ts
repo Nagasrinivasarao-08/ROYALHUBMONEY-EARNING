@@ -30,11 +30,8 @@ export interface Transaction {
   date: string;
   status: 'pending' | 'success' | 'failed' | 'rejected';
   userId?: string; // Link transaction to a specific user
-  withdrawalDetails?: {
-      method: 'upi' | 'bank';
-      details: string; // The primary field
-      info?: string;   // Backup field for compatibility
-  };
+  // Relaxed type to handle both String (saved in DB) and Object (from frontend)
+  withdrawalDetails?: any; 
 }
 
 export interface User {
