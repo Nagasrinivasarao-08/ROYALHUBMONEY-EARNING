@@ -1,7 +1,9 @@
 import { AppState, Product, User, AppSettings, Transaction } from '../types';
 
 // --- CONFIGURATION ---
-export const PRODUCTION_API_URL = 'https://royal-hub-backend.onrender.com/api';
+// IMPORTANT: Set VITE_API_URL in your Vercel Project Settings to your Render Backend URL
+// Example: https://your-app-name.onrender.com/api
+export const DEFAULT_PRODUCTION_URL = 'https://royal-hub-backend.onrender.com/api';
 export const LOCAL_API_URL = 'http://localhost:5000/api';
 
 // --- URL DETECTION LOGIC ---
@@ -13,13 +15,12 @@ const isLocal = typeof window !== 'undefined' && (
 // 1. Try VITE_API_URL from Environment (Vercel)
 const envApiUrl = (import.meta as any).env?.VITE_API_URL;
 
-// 2. Validate Env Var (Ignore "localhost" if we are in production)
-const isValidEnvUrl = envApiUrl && (isLocal || !envApiUrl.includes('localhost'));
+// 2. Determine Base URL
+let baseUrl = envApiUrl;
 
-// 3. Select Best URL
-let baseUrl = isValidEnvUrl 
-    ? envApiUrl 
-    : (isLocal ? LOCAL_API_URL : PRODUCTION_API_URL);
+if (!baseUrl) {
+    baseUrl = isLocal ? LOCAL_API_URL : DEFAULT_PRODUCTION_URL;
+}
 
 // Remove trailing slash if present
 if (baseUrl.endsWith('/')) {
@@ -30,10 +31,10 @@ export const API_URL = baseUrl;
 
 // Debug logging
 if (typeof window !== 'undefined') {
-    console.log("%c Royal Hub API Connection ", "background: #222; color: #bada55", {
+    console.log("%c Royal Hub API Connection ", "background: #2c1810; color: #fbbf24; padding: 4px; border-radius: 4px;", {
         mode: isLocal ? "Development" : "Production",
         target: API_URL,
-        usingEnvVar: !!envApiUrl
+        source: envApiUrl ? "Environment Variable (VITE_API_URL)" : "Default Fallback"
     });
 }
 
@@ -77,7 +78,7 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
     } catch (error: any) {
         console.error(`API Error at ${endpoint}:`, error);
         if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
-            throw new Error(`Server Unreachable at ${API_URL}. The backend may be sleeping.`);
+            throw new Error(`Server Unreachable at ${API_URL}. If you are the admin, check if the Backend is deployed and running.`);
         }
         throw error;
     }
@@ -108,13 +109,16 @@ export const api = {
         if (currentUser && currentUser.id && currentUser.id !== 'undefined' && currentUser.id !== 'null') {
             try {
                 refreshedUser = await request(`/users/${currentUser.id}`);
+                // Only fetch all users if logged in as admin
                 if (refreshedUser.role === 'admin') {
                     users = await request('/admin/users');
                 } else {
+                    // For normal users, we don't need the full user list, saving bandwidth
                     users = [refreshedUser];
                 }
             } catch (e) {
                 console.warn("Session refresh failed:", e);
+                // If fetching the user fails (e.g. deleted from DB), logout
                 refreshedUser = null; 
             }
         }
