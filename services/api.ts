@@ -1,48 +1,48 @@
 import { AppState, Product, User, AppSettings, Transaction } from '../types';
 
-// PRODUCTION SETUP:
-// Detect if running on localhost for development
+// --- CONFIGURATION ---
+export const PRODUCTION_API_URL = 'https://royal-hub-backend.onrender.com/api';
+export const LOCAL_API_URL = 'http://localhost:5000/api';
+
+// --- URL DETECTION LOGIC ---
 const isLocal = typeof window !== 'undefined' && (
     window.location.hostname === 'localhost' || 
     window.location.hostname === '127.0.0.1'
 );
 
-// Determine API URL:
-// 1. Get Env Var from Vite/Vercel (Optional override)
+// 1. Try VITE_API_URL from Environment (Vercel)
 const envApiUrl = (import.meta as any).env?.VITE_API_URL;
 
-// 2. Validate: If we are in Production (not isLocal), and the Env Var is "localhost", it is WRONG. Ignore it.
+// 2. Validate Env Var (Ignore "localhost" if we are in production)
 const isValidEnvUrl = envApiUrl && (isLocal || !envApiUrl.includes('localhost'));
 
-// 3. Fallback to Render backend provided by user
-// Using the URL from your screenshot: https://royal-hub-backend.onrender.com
+// 3. Select Best URL
 let baseUrl = isValidEnvUrl 
     ? envApiUrl 
-    : (isLocal ? 'http://localhost:5000/api' : 'https://royal-hub-backend.onrender.com/api');
+    : (isLocal ? LOCAL_API_URL : PRODUCTION_API_URL);
 
-// Remove trailing slash if present to avoid double slashes (e.g. .../api//products)
+// Remove trailing slash if present
 if (baseUrl.endsWith('/')) {
     baseUrl = baseUrl.slice(0, -1);
 }
 
 export const API_URL = baseUrl;
 
-// Debug logging for easier troubleshooting in Vercel logs
+// Debug logging
 if (typeof window !== 'undefined') {
-    console.log("Royal Hub API Config:", {
-        environment: isLocal ? "Localhost" : "Production",
-        targetUrl: API_URL,
-        envVarFound: !!envApiUrl
+    console.log("%c Royal Hub API Connection ", "background: #222; color: #bada55", {
+        mode: isLocal ? "Development" : "Production",
+        target: API_URL,
+        usingEnvVar: !!envApiUrl
     });
 }
 
-// Helper for Fetch
+// --- API CLIENT HELPERS ---
 const request = async (endpoint: string, options: RequestInit = {}) => {
     try {
-        // Ensure endpoint starts with /
         const safeEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
         
-        // CACHE BUSTING: Add a timestamp to every GET request to prevent stale data
+        // Cache Busting for GET requests
         let url = `${API_URL}${safeEndpoint}`;
         if (!options.method || options.method === 'GET') {
             const separator = url.includes('?') ? '&' : '?';
@@ -57,12 +57,8 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
             ...options.headers
         };
 
-        const res = await fetch(url, {
-            ...options,
-            headers
-        });
+        const res = await fetch(url, { ...options, headers });
         
-        // Attempt to parse JSON, but handle HTML/Text responses (common in 404s or Gateway errors)
         let responseBody;
         const contentType = res.headers.get("content-type");
         if (contentType && contentType.includes("application/json")) {
@@ -72,7 +68,6 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
         }
         
         if (!res.ok) {
-            // Prioritize specific error messages sent by backend
             const errorMessage = responseBody.message || responseBody.error || `Request failed with status ${res.status}`;
             throw new Error(errorMessage);
         }
@@ -81,19 +76,14 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
 
     } catch (error: any) {
         console.error(`API Error at ${endpoint}:`, error);
-        
-        // Handle Network Errors (Server down, offline, CORS)
         if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
-            throw new Error(`Server Unreachable. The backend may be sleeping or offline.`);
+            throw new Error(`Server Unreachable at ${API_URL}. The backend may be sleeping.`);
         }
-        
-        // Pass through the specific error message
         throw error;
     }
 };
 
 export const api = {
-    // Helper to see what URL is being used (Required by App.tsx)
     getBaseUrl: () => API_URL,
 
     // Auth
@@ -109,20 +99,15 @@ export const api = {
 
     // Data Fetching
     getInitialState: async (currentUser: User | null): Promise<AppState> => {
-        // Fetch products and settings publicly
         const products = await request('/products');
         const settings = await request('/admin/settings');
         
         let users: User[] = [];
         let refreshedUser = null;
 
-        // STRICT CHECK: Only attempt to fetch user if ID is valid string and NOT "undefined"
         if (currentUser && currentUser.id && currentUser.id !== 'undefined' && currentUser.id !== 'null') {
             try {
-                // Refresh specific user data
                 refreshedUser = await request(`/users/${currentUser.id}`);
-                
-                // If Admin, fetch ALL users immediately
                 if (refreshedUser.role === 'admin') {
                     users = await request('/admin/users');
                 } else {
@@ -130,7 +115,6 @@ export const api = {
                 }
             } catch (e) {
                 console.warn("Session refresh failed:", e);
-                // Return null user to trigger logout if session is invalid
                 refreshedUser = null; 
             }
         }
@@ -143,11 +127,8 @@ export const api = {
         };
     },
 
-    // User Actions
     getUser: (userId: string) => {
-        if (!userId || userId === 'undefined' || userId === 'null') {
-            return Promise.reject(new Error("Invalid User ID"));
-        }
+        if (!userId || userId === 'undefined') return Promise.reject(new Error("Invalid User ID"));
         return request(`/users/${userId}`);
     },
 
@@ -162,7 +143,7 @@ export const api = {
     }),
 
     recharge: (userId: string, amount: number) => {
-        if (!userId || userId === 'undefined') return Promise.reject(new Error("User ID missing"));
+        if (!userId) return Promise.reject(new Error("User ID missing"));
         return request('/transactions', {
             method: 'POST',
             body: JSON.stringify({ userId, type: 'recharge', amount })
@@ -174,7 +155,6 @@ export const api = {
         body: JSON.stringify({ userId, type: 'withdrawal', amount, withdrawalDetails: details })
     }),
 
-    // Admin Actions
     addProduct: (product: Product) => request('/products', {
         method: 'POST',
         body: JSON.stringify(product)

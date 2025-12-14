@@ -41,7 +41,8 @@ A full-stack MERN (MongoDB, Express, React, Node.js) investment simulation platf
     Create a `.env` or set environment variables for the frontend:
     ```env
     VITE_API_KEY=your_gemini_api_key
-    VITE_API_URL=http://localhost:5000/api
+    # Default is localhost:5000 for dev, but you can override:
+    VITE_API_URL=https://royal-hub-backend.onrender.com/api
     ```
 
 3.  **Run the Application**
@@ -65,7 +66,7 @@ A full-stack MERN (MongoDB, Express, React, Node.js) investment simulation platf
 
 ## Deployment Guide
 
-This app uses a separated architecture: **Frontend** on Vercel and **Backend** on Render (or similar Node.js hosting).
+This app uses a separated architecture: **Frontend** on Vercel and **Backend** on Render.
 
 ### 1. Frontend Deployment (Vercel)
 
@@ -73,17 +74,17 @@ This app uses a separated architecture: **Frontend** on Vercel and **Backend** o
 2.  Import the project into Vercel.
 3.  **Configure Project Settings (Critical):**
     *   **Framework Preset:** Vite
-    *   **Build Command:** `npm run build`  <-- *Do NOT use `npm run dev`*
+    *   **Build Command:** `npm run build`
     *   **Output Directory:** `dist`
     *   **Install Command:** `npm install`
 4.  **Environment Variables:**
     *   `VITE_API_KEY`: Your Google Gemini API Key.
-    *   *Note: `VITE_API_URL` is optional. The app automatically connects to the Royal Hub Backend on Render if not specified.*
+    *   `VITE_API_URL`: `https://royal-hub-backend.onrender.com/api`
 5.  Deploy.
 
-### 2. Backend Deployment (Render / Railway)
+### 2. Backend Deployment (Render)
 
-1.  Connect your repository to Render or Railway.
+1.  Connect your repository to Render.
 2.  **Build Command:** `npm install`
 3.  **Start Command:** `npm run server`
 4.  **Environment Variables:**
