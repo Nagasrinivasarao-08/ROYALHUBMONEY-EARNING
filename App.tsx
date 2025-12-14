@@ -48,17 +48,31 @@ function App() {
   const fetchWithRetry = async (currentUser: User | null, retries = 20, delay = 3000): Promise<boolean> => {
       try {
           const data = await api.getInitialState(currentUser);
+          
+          // Strict User Sync: If backend returns null for currentUser, we must reflect that
+          const isValidUser = !!data.currentUser;
+          
           setState(prev => ({
               ...prev,
               ...data,
-              currentUser: data.currentUser || prev.currentUser
+              // If data.currentUser is null, it means session is invalid/expired
+              currentUser: data.currentUser
           }));
+
+          // If we expected a user but got none, update auth state
+          if (currentUser && !isValidUser) {
+              setIsAuth(false);
+              localStorage.removeItem('royal_user_id');
+          }
+
           return true;
       } catch (error: any) {
           const attempt = 20 - retries + 1;
           console.warn(`Fetch attempt ${attempt} failed. Retries left: ${retries}`, error);
           setRetryCount(attempt);
-          setErrorMessage(error.message || 'Unknown error');
+          
+          const msg = error.message || 'Unknown error';
+          setErrorMessage(msg);
           
           if (retries > 0) {
               await new Promise(resolve => setTimeout(resolve, delay));
@@ -69,18 +83,24 @@ function App() {
   };
 
   const fetchData = async () => {
-      // Don't set isLoading(true) here as it causes flickering on background polls
       try {
           const data = await api.getInitialState(state.currentUser);
           setState(prev => ({
               ...prev,
               ...data,
-              currentUser: data.currentUser || prev.currentUser
+              // If backend returns null, user is logged out on server
+              currentUser: data.currentUser 
           }));
+          
+          // Force logout if backend says token invalid
+          if (state.currentUser && !data.currentUser) {
+              setIsAuth(false);
+              localStorage.removeItem('royal_user_id');
+          }
+
           setConnectionError(false);
       } catch (error) {
           console.error("Failed to fetch data:", error);
-          // Only show full error screen if we completely lose connection and aren't just polling
           if (!connectionError && !state.products.length) setConnectionError(true);
       }
   };
@@ -89,37 +109,33 @@ function App() {
       const init = async () => {
         setIsLoading(true);
         setConnectionError(false);
+        setRetryCount(0);
+        
         const storedUserId = localStorage.getItem('royal_user_id');
         let restoredUser = null;
         
         // Safety: Check if stored ID is strictly valid
         if (storedUserId && storedUserId !== 'undefined' && storedUserId !== 'null') {
             try {
-                // We don't fetch full user here, just optimistically set ID for the initial state fetch
-                // The actual user object will be populated by getInitialState
+                // Optimistically set ID for the initial state fetch
                 restoredUser = { id: storedUserId } as User;
-                setIsAuth(true); // Optimistically auth
+                setIsAuth(true); 
             } catch (err) {
                 localStorage.removeItem('royal_user_id');
             }
         }
 
         try {
-            // Attempt to fetch initial state with heavy retries
             await fetchWithRetry(restoredUser);
             
-            // If successful, check if we got a real user back
-            const finalState = await api.getInitialState(restoredUser);
-            if (finalState.currentUser) {
-                 showToast(`Welcome back, ${finalState.currentUser.username}`, 'success');
-                 if (finalState.currentUser.role === 'admin') setActiveTab('admin');
-            }
-            
+            // Check state immediately after fetch
+            // We need to look at the result of the fetch, but state updates are async.
+            // So we rely on fetchWithRetry to handle the state update logic above.
             setConnectionError(false);
         } catch (error: any) {
             console.error("Init failed after retries:", error);
             setConnectionError(true);
-            setErrorMessage(error.message);
+            setErrorMessage(error.message || "Failed to connect to backend.");
         } finally {
             setIsLoading(false);
         }
@@ -351,7 +367,7 @@ function App() {
       const storedUserId = localStorage.getItem('royal_user_id');
       const mockUser = storedUserId ? { id: storedUserId } as User : null;
       
-      fetchWithRetry(mockUser)
+      fetchWithRetry(mockUser, 20, 2000)
         .then(() => setConnectionError(false))
         .catch((e) => {
             setConnectionError(true);
