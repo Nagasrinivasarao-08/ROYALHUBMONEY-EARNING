@@ -13,28 +13,24 @@ dotenv.config();
 
 const app = express();
 
+// 1. CORS CONFIGURATION (Must be first)
+// This configuration allows credentials and handles the preflight requests correctly.
+app.use(cors({
+    origin: true, // Automatically reflect the request origin
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'X-Requested-With']
+}));
+
+// Handle preflight requests explicitly for all routes
+app.options('*', cors());
+
+// 2. Body Parsers (Must be after CORS)
 // INCREASED LIMIT: Fixes issues where uploading product images or QR codes failed
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// CORS Configuration - CRITICAL FIX FOR VERCEL
-// We use a dynamic origin check to allow connections from Vercel while supporting credentials
-app.use(cors({
-    origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps, curl, or server-to-server)
-        if (!origin) return callback(null, true);
-        // Allow all origins by returning the origin in the callback
-        // This is necessary because 'credentials: true' does not work with origin: '*'
-        return callback(null, true);
-    },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma'],
-    credentials: true,
-    optionsSuccessStatus: 200 
-}));
-
 // MongoDB Connection
-// Use the provided connection string as default if env is missing
 const MONGO_URL = process.env.MONGO_URL || 'mongodb+srv://nagasrinivasaraoeevuri_db_user:Srinivas%409121@cluster0.zpuclhq.mongodb.net/?appName=Cluster0';
 
 mongoose.set('strictQuery', false);
