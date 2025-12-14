@@ -8,14 +8,14 @@ const isLocal = typeof window !== 'undefined' && (
 );
 
 // Determine API URL:
-// 1. Get Env Var from Vite/Vercel
+// 1. Get Env Var from Vite/Vercel (Optional override)
 const envApiUrl = (import.meta as any).env?.VITE_API_URL;
 
 // 2. Validate: If we are in Production (not isLocal), and the Env Var is "localhost", it is WRONG. Ignore it.
 const isValidEnvUrl = envApiUrl && (isLocal || !envApiUrl.includes('localhost'));
 
 // 3. Fallback to Render backend provided by user
-// FIXED: Added '/api' to the production URL so it matches the server routes
+// Using the URL from your screenshot: https://royal-hub-backend.onrender.com
 let baseUrl = isValidEnvUrl 
     ? envApiUrl 
     : (isLocal ? 'http://localhost:5000/api' : 'https://royal-hub-backend.onrender.com/api');

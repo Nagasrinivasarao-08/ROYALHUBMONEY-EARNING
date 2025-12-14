@@ -44,13 +44,15 @@ const seedAdmin = async () => {
                 balance: 0
             });
             await admin.save();
-            console.log('✅ Default Admin Account Seeded (srinivas@gmail.com)');
+            console.log('✅ Default Admin Account Seeded');
+            console.log('   Email: srinivas@gmail.com');
+            console.log('   Pass:  srinivas@9121');
         } else {
             // Ensure role is admin if it exists
             if (exists.role !== 'admin') {
                 exists.role = 'admin';
                 await exists.save();
-                console.log('✅ Updated existing admin account permissions');
+                console.log('✅ Updated permissions for srinivas@gmail.com to Admin');
             }
         }
     } catch (err) {
@@ -106,4 +108,5 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`🚀 Backend server is running on port ${PORT}`);
+  console.log(`📡 Ready to accept connections`);
 });
