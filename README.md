@@ -33,10 +33,15 @@ A full-stack MERN (MongoDB, Express, React, Node.js) investment simulation platf
     ```
 
 2.  **Configure Environment**
-    Create a `.env` file in the root directory:
+    Create a `.env` file in the root directory for the backend:
     ```env
     MONGO_URL=your_mongodb_connection_string
+    ```
+    
+    Create a `.env` or set environment variables for the frontend:
+    ```env
     VITE_API_KEY=your_gemini_api_key
+    VITE_API_URL=http://localhost:5000/api
     ```
 
 3.  **Run the Application**
@@ -58,7 +63,29 @@ A full-stack MERN (MongoDB, Express, React, Node.js) investment simulation platf
 - **Email**: `srinivas@gmail.com`
 - **Password**: `srinivas@9121`
 
-## Deployment
+## Deployment Guide
 
-- **Frontend**: Vercel / Netlify
-- **Backend**: Render / Railway / Heroku
+This is a Full Stack app, so it is recommended to deploy the **Frontend** and **Backend** separately for best results.
+
+### 1. Frontend Deployment (Netlify)
+
+1.  Connect your repository to Netlify.
+2.  **Build Command:** `npm run build`
+3.  **Publish Directory:** `dist`
+4.  **Environment Variables:**
+    - `VITE_API_KEY`: Your Google Gemini API Key.
+    - `VITE_API_URL`: The URL of your deployed Backend (e.g., `https://royal-hub-backend.onrender.com/api`).
+5.  Deploy.
+
+### 2. Backend Deployment (Render / Railway)
+
+1.  Connect your repository to Render or Railway.
+2.  **Build Command:** `npm install`
+3.  **Start Command:** `npm run server` (or `node server/index.js`)
+4.  **Environment Variables:**
+    - `MONGO_URL`: Your MongoDB connection string.
+5.  Deploy.
+6.  Copy the backend URL and update the `VITE_API_URL` in your Netlify settings.
+
+### Note on `netlify.toml`
+The included `netlify.toml` file handles Single Page Application (SPA) routing, ensuring pages like `/dashboard` work correctly upon refresh.

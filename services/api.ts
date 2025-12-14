@@ -1,19 +1,28 @@
-
 import { AppState, Product, User, AppSettings, Transaction } from '../types';
 
 // PRODUCTION SETUP:
+// Detect if running on localhost for development
 const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-// Cast import.meta to any to avoid TypeScript errors with 'env'
-const API_URL = (import.meta as any).env?.VITE_API_URL || 
-                (isLocal ? 'http://localhost:5000/api' : 'https://royal-hub-backend.onrender.com/api');
+// Determine API URL:
+// 1. Get Env Var from Vite/Netlify
+const envApiUrl = (import.meta as any).env?.VITE_API_URL;
 
-console.log("API Service Initialized. Target:", API_URL);
+// 2. Validate: If we are in Production (not isLocal), and the Env Var is "localhost", it is WRONG. Ignore it.
+//    This fixes the issue where Netlify UI has the wrong URL configured.
+const isValidEnvUrl = envApiUrl && (isLocal || !envApiUrl.includes('localhost'));
+
+// 3. Fallback to Render backend provided by user
+export const API_URL = isValidEnvUrl 
+    ? envApiUrl 
+    : (isLocal ? 'http://localhost:5000/api' : 'https://royal-hub-backend.onrender.com/api');
+
+console.log("API Service Initialized. Mode:", isLocal ? "Local" : "Production", "Target:", API_URL);
 
 // Helper for Fetch
 const request = async (endpoint: string, options: RequestInit = {}) => {
     try {
-        // CACHE BUSTING: Add a timestamp to every GET request
+        // CACHE BUSTING: Add a timestamp to every GET request to prevent stale data
         let url = `${API_URL}${endpoint}`;
         if (!options.method || options.method === 'GET') {
             const separator = url.includes('?') ? '&' : '?';
@@ -64,6 +73,9 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
 };
 
 export const api = {
+    // Helper to see what URL is being used (Required by App.tsx)
+    getBaseUrl: () => API_URL,
+
     // Auth
     login: (email: string, password: string) => request('/auth/login', {
         method: 'POST',

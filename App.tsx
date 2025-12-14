@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
@@ -333,9 +332,14 @@ function App() {
               <div className="text-center bg-white p-8 rounded-xl shadow-2xl max-w-sm">
                   <AlertTriangle size={64} className="mx-auto mb-4 text-red-500" />
                   <h2 className="text-xl font-bold text-gray-800 mb-2">Connection Failed</h2>
-                  <p className="text-gray-600 mb-6 text-sm">
-                      Could not connect to the Royal Hub Backend. Please ensure the server is running.
+                  <p className="text-gray-600 mb-2 text-sm">
+                      Could not connect to the Royal Hub Backend.
                   </p>
+                  <div className="bg-gray-100 p-2 rounded mb-6 border border-gray-200">
+                      <p className="text-xs text-gray-500 font-mono break-all">
+                          Target: {api.getBaseUrl()}
+                      </p>
+                  </div>
                   <button 
                     onClick={() => { setIsLoading(true); fetchData(); }}
                     className="bg-amber-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-amber-700 transition-colors"
