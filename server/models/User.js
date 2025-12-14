@@ -13,8 +13,8 @@ const TransactionSchema = new mongoose.Schema({
     enum: ['pending', 'success', 'failed', 'rejected'],
     default: 'success'
   },
-  // CHANGED: Use Mixed type to allow both legacy Objects and new JSON Strings.
-  // This prevents "Cast to string failed" validation errors on existing data.
+  // CHANGED: Explicitly use Mixed to allow both Objects (legacy) and Strings (new)
+  // This is critical for preventing "Cast to string failed" errors on existing data.
   withdrawalDetails: { type: mongoose.Schema.Types.Mixed, default: '' }
 }, { strict: false });
 

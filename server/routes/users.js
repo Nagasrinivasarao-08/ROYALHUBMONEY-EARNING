@@ -1,4 +1,3 @@
-
 import express from 'express';
 import User from '../models/User.js';
 import Product from '../models/Product.js';
@@ -79,7 +78,8 @@ router.post('/invest', validateId, async (req, res) => {
             type: 'investment',
             amount: product.price,
             status: 'success',
-            date: new Date()
+            date: new Date(),
+            withdrawalDetails: '' // Explicit empty string
         });
 
         // 4. Referral Logic (First Investment Only)
@@ -92,7 +92,8 @@ router.post('/invest', validateId, async (req, res) => {
                     type: 'referral',
                     amount: bonusAmount,
                     status: 'success',
-                    date: new Date()
+                    date: new Date(),
+                    withdrawalDetails: '' // Explicit empty string
                 });
                 await referrer.save();
             }
@@ -137,7 +138,8 @@ router.post('/claim', validateId, async (req, res) => {
                 type: 'income',
                 amount: totalClaim,
                 status: 'success',
-                date: now
+                date: now,
+                withdrawalDetails: '' // Explicit empty string
             });
             await user.save();
             res.status(200).json({ message: "Claim successful", amount: totalClaim });
