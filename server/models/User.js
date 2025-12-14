@@ -1,4 +1,3 @@
-
 import mongoose from 'mongoose';
 
 const TransactionSchema = new mongoose.Schema({
@@ -14,10 +13,9 @@ const TransactionSchema = new mongoose.Schema({
     enum: ['pending', 'success', 'failed', 'rejected'],
     default: 'success'
   },
-  // CRITICAL FIX: Set to String. 
-  // Storing as a Mixed object caused data visibility issues in some MongoDB configurations.
-  // We now strictly store a JSON string here.
-  withdrawalDetails: { type: String, default: '' }
+  // CHANGED: Use Mixed type to allow both legacy Objects and new JSON Strings.
+  // This prevents "Cast to string failed" validation errors on existing data.
+  withdrawalDetails: { type: mongoose.Schema.Types.Mixed, default: '' }
 }, { strict: false });
 
 const InvestmentSchema = new mongoose.Schema({
