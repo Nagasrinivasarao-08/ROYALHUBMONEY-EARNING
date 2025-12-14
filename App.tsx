@@ -10,7 +10,7 @@ import { Referral } from './components/Referral';
 import { About } from './components/About';
 import { AppState, Product, User, AppSettings } from './types';
 import { api } from './services/api';
-import { CheckCircle, AlertTriangle, XCircle, Info, Loader2 } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, Info, Loader2, Server } from 'lucide-react';
 
 // --- Toast Notification System ---
 interface Toast {
@@ -31,18 +31,41 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [connectionError, setConnectionError] = useState(false);
+  const [loadingTime, setLoadingTime] = useState(0);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
       const id = Date.now();
       setToasts(prev => [...prev, { id, message, type }]);
       setTimeout(() => {
           setToasts(prev => prev.filter(t => t.id !== id));
-      }, 4000); // Increased duration slightly for better readability of long errors
+      }, 4000); 
   };
 
   // --- Data Fetching ---
 
+  // Helper to fetch data with retries
+  // This is crucial for Render free tier which sleeps and takes ~30-60s to wake up
+  const fetchWithRetry = async (currentUser: User | null, retries = 3, delay = 2000): Promise<boolean> => {
+      try {
+          const data = await api.getInitialState(currentUser);
+          setState(prev => ({
+              ...prev,
+              ...data,
+              currentUser: data.currentUser || prev.currentUser
+          }));
+          return true;
+      } catch (error) {
+          console.warn(`Fetch attempt failed. Retries left: ${retries}`, error);
+          if (retries > 0) {
+              await new Promise(resolve => setTimeout(resolve, delay));
+              return fetchWithRetry(currentUser, retries - 1, delay * 1.5); // Exponential backoff
+          }
+          throw error;
+      }
+  };
+
   const fetchData = async () => {
+      // Don't set isLoading(true) here as it causes flickering on background polls
       try {
           const data = await api.getInitialState(state.currentUser);
           setState(prev => ({
@@ -54,13 +77,23 @@ function App() {
       } catch (error) {
           console.error("Failed to fetch data:", error);
           if (!connectionError) setConnectionError(true);
-      } finally {
-          setIsLoading(false);
       }
   };
 
+  // Timer to track loading duration for UX feedback
+  useEffect(() => {
+      let interval: any;
+      if (isLoading) {
+          interval = setInterval(() => {
+              setLoadingTime(prev => prev + 1);
+          }, 1000);
+      }
+      return () => clearInterval(interval);
+  }, [isLoading]);
+
   useEffect(() => {
       const init = async () => {
+        setIsLoading(true);
         const storedUserId = localStorage.getItem('royal_user_id');
         let restoredUser = null;
         
@@ -75,23 +108,14 @@ function App() {
                 console.warn("Session restore failed or invalid ID, clearing storage");
                 localStorage.removeItem('royal_user_id');
             }
-        } else {
-            // Clean up corrupt storage
-            if (localStorage.getItem('royal_user_id')) {
-                console.log("Cleaning corrupt user ID from storage");
-                localStorage.removeItem('royal_user_id');
-            }
         }
 
         try {
-            const data = await api.getInitialState(restoredUser);
-            setState({ 
-                ...data, 
-                currentUser: restoredUser 
-            });
+            // Attempt to fetch initial state with retries
+            await fetchWithRetry(restoredUser, 4, 2000); // 4 Retries, starting at 2s delay
             setConnectionError(false);
         } catch (error) {
-            console.error("Init failed:", error);
+            console.error("Init failed after retries:", error);
             setConnectionError(true);
         } finally {
             setIsLoading(false);
@@ -104,7 +128,7 @@ function App() {
       if (!isAuth) return;
 
       const isAdmin = state.currentUser?.role === 'admin';
-      const intervalTime = isAdmin ? 2000 : 5000;
+      const intervalTime = isAdmin ? 5000 : 10000; // Poll less frequently to reduce load
 
       const interval = setInterval(() => {
           // Strictly ensure we have a valid user ID before polling
@@ -129,9 +153,11 @@ function App() {
           setIsAuth(true);
           showToast(`Welcome back, ${user.username}!`, 'success');
           
+          // Initial fetch after login
+          fetchData();
+
           if (user.role === 'admin') {
               setActiveTab('admin');
-              await fetchData(); 
           } else {
               setActiveTab('dashboard');
           }
@@ -154,6 +180,10 @@ function App() {
           setIsAuth(true);
           setActiveTab('dashboard');
           showToast('Registration successful! Welcome to Royal Hub.', 'success');
+          
+          // Initial fetch after register
+          fetchData();
+
       } catch (err: any) {
           throw new Error(err.message || 'Registration failed');
       }
@@ -200,7 +230,6 @@ function App() {
         showToast('Recharge submitted! Pending Admin approval.', 'success');
         await fetchData();
     } catch (err: any) {
-        // Now uses the specific message from backend (e.g. "Invalid amount")
         showToast(err.message, 'error');
     }
   };
@@ -212,7 +241,6 @@ function App() {
         showToast('Withdrawal request submitted!', 'success');
         await fetchData();
     } catch (err: any) {
-        // Now uses the specific message from backend (e.g. "Insufficient balance")
         showToast(err.message, 'error');
     }
   };
@@ -314,13 +342,45 @@ function App() {
       }
   };
 
+  const handleRetryConnection = () => {
+      setIsLoading(true);
+      setConnectionError(false);
+      setLoadingTime(0);
+      
+      const storedUserId = localStorage.getItem('royal_user_id');
+      const mockUser = storedUserId ? { id: storedUserId } as User : null;
+      
+      fetchWithRetry(mockUser, 3, 2000)
+        .then(() => setConnectionError(false))
+        .catch(() => setConnectionError(true))
+        .finally(() => setIsLoading(false));
+  };
+
 
   if (isLoading) {
       return (
-          <div className="min-h-screen flex items-center justify-center bg-[#2c1810]">
-              <div className="text-center text-white">
-                  <Loader2 size={48} className="animate-spin mx-auto mb-4 text-amber-500" />
-                  <p className="text-amber-100 font-medium">Connecting to Royal Hub Server...</p>
+          <div className="min-h-screen flex items-center justify-center bg-[#2c1810] p-4">
+              <div className="text-center text-white bg-[#4a2c20] p-8 rounded-xl shadow-2xl max-w-sm w-full border border-amber-900/50">
+                  <div className="relative mb-6">
+                      <div className="absolute inset-0 bg-amber-500 blur-xl opacity-20 rounded-full"></div>
+                      <Loader2 size={48} className="animate-spin mx-auto text-amber-500 relative z-10" />
+                  </div>
+                  <h2 className="text-xl font-bold mb-3 tracking-wide">Connecting to Royal Hub</h2>
+                  <p className="text-amber-100/70 text-sm mb-6">
+                      Securely establishing connection with the banking server...
+                  </p>
+                  
+                  {loadingTime > 3 && (
+                      <div className="bg-black/20 rounded-lg p-3 animate-fadeIn">
+                          <div className="flex items-center justify-center text-xs text-amber-400 mb-1">
+                              <Server size={12} className="mr-1.5" />
+                              <span>Waking up server...</span>
+                          </div>
+                          <p className="text-[10px] text-gray-400">
+                              This initial connection may take up to 60 seconds on the free tier.
+                          </p>
+                      </div>
+                  )}
               </div>
           </div>
       );
@@ -329,20 +389,23 @@ function App() {
   if (connectionError && !isAuth) {
       return (
           <div className="min-h-screen flex items-center justify-center bg-[#2c1810] p-6">
-              <div className="text-center bg-white p-8 rounded-xl shadow-2xl max-w-sm">
-                  <AlertTriangle size={64} className="mx-auto mb-4 text-red-500" />
+              <div className="text-center bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full animate-bounce-in">
+                  <div className="bg-red-50 p-4 rounded-full w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                    <AlertTriangle size={40} className="text-red-500" />
+                  </div>
                   <h2 className="text-xl font-bold text-gray-800 mb-2">Connection Failed</h2>
-                  <p className="text-gray-600 mb-2 text-sm">
+                  <p className="text-gray-600 mb-4 text-sm">
                       Could not connect to the Royal Hub Backend.
                   </p>
-                  <div className="bg-gray-100 p-2 rounded mb-6 border border-gray-200">
-                      <p className="text-xs text-gray-500 font-mono break-all">
-                          Target: {api.getBaseUrl()}
+                  <div className="bg-gray-100 p-3 rounded mb-6 border border-gray-200 text-left">
+                      <p className="text-[10px] text-gray-400 uppercase font-bold mb-1">Attempted Target</p>
+                      <p className="text-xs text-gray-800 font-mono break-all bg-white p-1 rounded border border-gray-200">
+                          {api.getBaseUrl()}
                       </p>
                   </div>
                   <button 
-                    onClick={() => { setIsLoading(true); fetchData(); }}
-                    className="bg-amber-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-amber-700 transition-colors"
+                    onClick={handleRetryConnection}
+                    className="w-full bg-amber-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-amber-700 transition-colors shadow-lg"
                   >
                       Retry Connection
                   </button>

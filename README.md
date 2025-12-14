@@ -65,27 +65,27 @@ A full-stack MERN (MongoDB, Express, React, Node.js) investment simulation platf
 
 ## Deployment Guide
 
-This is a Full Stack app, so it is recommended to deploy the **Frontend** and **Backend** separately for best results.
+This app uses a separated architecture: **Frontend** on Vercel and **Backend** on Render (or similar Node.js hosting).
 
-### 1. Frontend Deployment (Netlify)
+### 1. Frontend Deployment (Vercel)
 
-1.  Connect your repository to Netlify.
-2.  **Build Command:** `npm run build`
-3.  **Publish Directory:** `dist`
+1.  Push your code to GitHub.
+2.  Import the project into Vercel.
+3.  **Configure Project Settings (Critical):**
+    *   **Framework Preset:** Vite
+    *   **Build Command:** `npm run build`  <-- *Do NOT use `npm run dev`*
+    *   **Output Directory:** `dist`
+    *   **Install Command:** `npm install`
 4.  **Environment Variables:**
-    - `VITE_API_KEY`: Your Google Gemini API Key.
-    - `VITE_API_URL`: The URL of your deployed Backend (e.g., `https://royal-hub-backend.onrender.com/api`).
+    *   `VITE_API_KEY`: Your Google Gemini API Key.
+    *   *Note: `VITE_API_URL` is optional. The app automatically connects to the Royal Hub Backend on Render if not specified.*
 5.  Deploy.
 
 ### 2. Backend Deployment (Render / Railway)
 
 1.  Connect your repository to Render or Railway.
 2.  **Build Command:** `npm install`
-3.  **Start Command:** `npm run server` (or `node server/index.js`)
+3.  **Start Command:** `npm run server`
 4.  **Environment Variables:**
-    - `MONGO_URL`: Your MongoDB connection string.
+    *   `MONGO_URL`: Your MongoDB connection string.
 5.  Deploy.
-6.  Copy the backend URL and update the `VITE_API_URL` in your Netlify settings.
-
-### Note on `netlify.toml`
-The included `netlify.toml` file handles Single Page Application (SPA) routing, ensuring pages like `/dashboard` work correctly upon refresh.
