@@ -81,8 +81,17 @@ app.get('/', (req, res) => {
 
 // Global Error Handler
 app.use((err, req, res, next) => {
+    if (res.headersSent) {
+        return next(err);
+    }
     console.error("Unhandled Server Error:", err.stack);
-    res.status(500).json({ message: "Internal Server Error", error: err.message });
+    
+    // Provide a standardized error response
+    res.status(500).json({ 
+        message: "Internal Server Error", 
+        error: "An unexpected error occurred on the server.",
+        details: process.env.NODE_ENV === 'development' ? err.message : undefined 
+    });
 });
 
 const PORT = process.env.PORT || 5000;

@@ -14,9 +14,11 @@ const TransactionSchema = new mongoose.Schema({
     enum: ['pending', 'success', 'failed', 'rejected'],
     default: 'success'
   },
-  // CRITICAL FIX: Use Mixed type. This allows ANY structure (Strings, Objects, etc.) to be saved.
-  withdrawalDetails: { type: mongoose.Schema.Types.Mixed }
-}, { strict: false }); // strict: false allows fields not defined in schema to be saved
+  // CRITICAL FIX: Set to String. 
+  // Storing as a Mixed object caused data visibility issues in some MongoDB configurations.
+  // We now strictly store a JSON string here.
+  withdrawalDetails: { type: String, default: '' }
+}, { strict: false });
 
 const InvestmentSchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },

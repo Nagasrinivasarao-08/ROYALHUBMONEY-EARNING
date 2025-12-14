@@ -10,37 +10,46 @@ router.post('/', async (req, res) => {
   const { userId, type, amount, withdrawalDetails } = req.body;
   
   console.log(`[Transaction] Processing ${type} request. Amount: ${amount}, UserId: ${userId}`);
-  if (withdrawalDetails) {
-      console.log(`[Transaction] INCOMING Withdrawal Details:`, JSON.stringify(withdrawalDetails));
-  }
-
-  // 1. Validate User ID
+  
+  // 1. Basic Validation
   if (!userId || typeof userId !== 'string' || !mongoose.Types.ObjectId.isValid(userId)) {
-      console.error(`[Transaction] Invalid UserId received: ${userId} (Type: ${typeof userId})`);
-      return res.status(400).json({ message: "Invalid User ID. Please re-login." });
+      return res.status(401).json({ message: "Session expired. Please log in again." });
   }
 
-  // 2. Validate Amount
+  // 2. Amount Validation
   const valAmount = Number(amount);
   if (isNaN(valAmount) || valAmount <= 0) {
-      console.error(`[Transaction] Invalid Amount: ${amount}`);
-      return res.status(400).json({ message: "Invalid amount entered." });
+      return res.status(400).json({ message: "Please enter a valid amount greater than zero." });
   }
 
   try {
     const user = await User.findById(userId);
     if (!user) {
-        console.error(`[Transaction] User not found in DB: ${userId}`);
         return res.status(404).json({ message: "User account not found." });
     }
 
+    // 3. Business Logic Validation
     if (type === 'withdrawal') {
         if (valAmount < 200) {
-            return res.status(400).json({ message: "Minimum withdrawal amount is ₹200" });
+            return res.status(400).json({ message: "Minimum withdrawal limit is ₹200." });
         }
         if (user.balance < valAmount) {
-            return res.status(400).json({ message: "Insufficient balance for withdrawal" });
+            return res.status(400).json({ 
+                message: `Insufficient balance. Available: ₹${user.balance.toFixed(2)}` 
+            });
         }
+    }
+
+    // Prepare robust withdrawal details string (preserves previous fix)
+    let detailsString = "";
+    if (withdrawalDetails) {
+        if (typeof withdrawalDetails === 'object') {
+            detailsString = JSON.stringify(withdrawalDetails);
+        } else {
+            detailsString = String(withdrawalDetails);
+        }
+    } else if (type === 'withdrawal') {
+        detailsString = JSON.stringify({ method: 'unknown', details: 'No details provided' });
     }
 
     const newTx = {
@@ -48,9 +57,7 @@ router.post('/', async (req, res) => {
         amount: valAmount,
         status: 'pending',
         date: new Date(),
-        // FORCE STRINGIFY: Convert object to string to guarantee MongoDB saves it.
-        // Mongoose sometimes drops nested Mixed objects, but it never drops strings.
-        withdrawalDetails: withdrawalDetails ? JSON.stringify(withdrawalDetails) : "{}"
+        withdrawalDetails: detailsString
     };
 
     // Transaction Logic
@@ -60,20 +67,21 @@ router.post('/', async (req, res) => {
 
     user.transactions.push(newTx);
     
-    // Explicitly mark modified
+    // Explicitly mark modified to ensure persistence
     user.markModified('transactions'); 
     
     await user.save();
     
-    // Verify save
-    const savedTx = user.transactions[user.transactions.length - 1];
-    console.log(`[Transaction] SAVED Transaction Data:`, savedTx.withdrawalDetails);
-    
     console.log(`[Transaction] Success: ${type} created for ${user.username}`);
     res.status(200).json(user);
+
   } catch (err) {
     console.error("[Transaction] DB Error:", err);
-    res.status(500).json({ message: "Transaction failed to process", error: err.message });
+    // Return specific 500 message
+    res.status(500).json({ 
+        message: "We couldn't process this transaction due to a system error. Please try again later.", 
+        technicalError: err.message 
+    });
   }
 });
 

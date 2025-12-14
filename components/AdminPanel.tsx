@@ -148,38 +148,6 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
       setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // ROBUST DISPLAY: Shows object content even if structure is weird or stringified
-  const getWithdrawalDetailsString = (details: any): string => {
-      if (!details) return '';
-      
-      let parsed = details;
-
-      // If it's a string that looks like JSON, try to parse it
-      if (typeof details === 'string') {
-          if (details.trim().startsWith('{')) {
-              try {
-                  parsed = JSON.parse(details);
-              } catch (e) {
-                  return details; // Return raw string if parse fails
-              }
-          } else {
-              return details;
-          }
-      }
-      
-      // If we have an object (either originally or parsed)
-      if (typeof parsed === 'object' && parsed !== null) {
-          // Priority: details -> info -> raw values
-          if (parsed.details) return parsed.details;
-          if (parsed.info) return parsed.info;
-          
-          // Fallback: If no known keys, return the raw JSON so admin can see SOMETHING
-          return JSON.stringify(parsed);
-      }
-      
-      return String(parsed);
-  };
-
   // --- Sub-Components (Condensed) ---
   const DashboardView = () => (
       <div className="space-y-4">
@@ -311,8 +279,37 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
         {view === 'withdrawals' && (
              <div className="space-y-2">
                 {getAllTransactions('withdrawal').filter(t => t.status === 'pending').map(tx => {
-                    const detailText = getWithdrawalDetailsString(tx.withdrawalDetails);
-                    const isUpi = tx.withdrawalDetails?.method === 'upi' || (typeof detailText === 'string' && detailText.includes('@'));
+                    // ROBUST PARSING LOGIC
+                    let detailsObj: any = {};
+                    const raw = tx.withdrawalDetails;
+                    
+                    try {
+                        if (typeof raw === 'string') {
+                            // Attempt to parse JSON string
+                            if (raw.trim().startsWith('{')) {
+                                detailsObj = JSON.parse(raw);
+                            } else {
+                                // Fallback for plain text legacy data
+                                detailsObj = { details: raw };
+                            }
+                        } else if (typeof raw === 'object' && raw !== null) {
+                             // Handle case where Mongoose might return mixed/object
+                            detailsObj = raw;
+                        } else {
+                             detailsObj = { details: 'No details available' };
+                        }
+                    } catch (e) {
+                        detailsObj = { details: String(raw) };
+                    }
+
+                    // Determine display values
+                    const displayMethod = detailsObj.method || 'bank'; 
+                    // Use 'details' first, then 'info', then fall back to raw stringified if needed
+                    const displayDetails = detailsObj.details || detailsObj.info || (typeof raw === 'string' ? raw : JSON.stringify(raw));
+                    
+                    // Improved UPI detection
+                    const isUpi = displayMethod === 'upi' || 
+                                 (typeof displayDetails === 'string' && displayDetails.includes('@') && !displayDetails.includes('IFSC'));
                     
                     return (
                     <div key={tx.id} className="bg-white p-3 rounded shadow-sm border-l-4 border-red-500">
@@ -334,14 +331,15 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
                                 {isUpi ? <QrCode size={12} className="mr-1"/> : <Building size={12} className="mr-1"/>}
                                 {isUpi ? 'UPI TRANSFER' : 'BANK TRANSFER'}
                             </div>
-                            <div className="bg-white border border-blue-200 p-2 rounded text-sm font-mono text-gray-700 break-all pr-8">
-                                {detailText || <span className="text-red-400 italic font-bold">MISSING DATA ({JSON.stringify(tx.withdrawalDetails)})</span>}
+                            {/* whitespace-pre-wrap ensures newlines in bank details are preserved */}
+                            <div className="bg-white border border-blue-200 p-2 rounded text-sm font-mono text-gray-700 break-all pr-8 whitespace-pre-wrap">
+                                {displayDetails || <span className="text-red-400 italic font-bold">MISSING DATA</span>}
                             </div>
                             
                             {/* Copy Button */}
-                            {detailText && (
+                            {displayDetails && (
                                 <button 
-                                    onClick={() => copyToClipboard(detailText, tx.id)}
+                                    onClick={() => copyToClipboard(displayDetails, tx.id)}
                                     className="absolute bottom-3 right-3 text-blue-400 hover:text-blue-600 transition-colors bg-white p-1 rounded border border-blue-100 shadow-sm"
                                     title="Copy Details"
                                 >

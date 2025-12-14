@@ -33,23 +33,32 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
             headers
         });
         
+        // Attempt to parse JSON, but handle HTML/Text responses (common in 404s or Gateway errors)
+        let responseBody;
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+            responseBody = await res.json();
+        } else {
+            responseBody = { message: await res.text() };
+        }
+        
         if (!res.ok) {
-            let errorMessage = "API Request Failed";
-            try {
-                const err = await res.json();
-                errorMessage = err.message || err.error || errorMessage;
-            } catch (e) {
-                errorMessage = `Server Error (${res.status}): ${res.statusText}`;
-            }
+            // Prioritize specific error messages sent by backend
+            const errorMessage = responseBody.message || responseBody.error || `Request failed with status ${res.status}`;
             throw new Error(errorMessage);
         }
-        return res.json();
+
+        return responseBody;
+
     } catch (error: any) {
         console.error(`API Error at ${endpoint}:`, error);
         
+        // Handle Network Errors (Server down, offline, CORS)
         if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
-            throw new Error(`Connection Error: Ensure Backend is running at ${API_URL}`);
+            throw new Error(`Server Unreachable. Please check your internet connection or ensure the backend is running.`);
         }
+        
+        // Pass through the specific error message
         throw error;
     }
 };

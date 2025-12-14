@@ -1,5 +1,4 @@
 
-
 import React, { useEffect, useState } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
@@ -9,6 +8,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { AIChat } from './components/AIChat';
 import { Auth } from './components/Auth';
 import { Referral } from './components/Referral';
+import { About } from './components/About';
 import { AppState, Product, User, AppSettings } from './types';
 import { api } from './services/api';
 import { CheckCircle, AlertTriangle, XCircle, Info, Loader2 } from 'lucide-react';
@@ -38,7 +38,7 @@ function App() {
       setToasts(prev => [...prev, { id, message, type }]);
       setTimeout(() => {
           setToasts(prev => prev.filter(t => t.id !== id));
-      }, 3000);
+      }, 4000); // Increased duration slightly for better readability of long errors
   };
 
   // --- Data Fetching ---
@@ -201,7 +201,8 @@ function App() {
         showToast('Recharge submitted! Pending Admin approval.', 'success');
         await fetchData();
     } catch (err: any) {
-        showToast(err.message || 'Recharge failed', 'error');
+        // Now uses the specific message from backend (e.g. "Invalid amount")
+        showToast(err.message, 'error');
     }
   };
 
@@ -212,7 +213,8 @@ function App() {
         showToast('Withdrawal request submitted!', 'success');
         await fetchData();
     } catch (err: any) {
-        showToast(err.message || 'Withdrawal failed', 'error');
+        // Now uses the specific message from backend (e.g. "Insufficient balance")
+        showToast(err.message, 'error');
     }
   };
 
@@ -403,6 +405,9 @@ function App() {
                     products={state.products}
                     settings={state.settings} 
                 />
+            )}
+             {activeTab === 'about' && (
+                <About />
             )}
             
             {activeTab === 'admin' && state.currentUser && (

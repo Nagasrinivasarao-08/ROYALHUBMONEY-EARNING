@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { LogOut, Home, Wallet, PieChart, ShieldCheck, Users } from 'lucide-react';
+import { LogOut, Home, Wallet, PieChart, ShieldCheck, Users, Info } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -15,17 +16,10 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
     { id: 'invest', icon: PieChart, label: 'Product' },
     { id: 'referral', icon: Users, label: 'Team' },
     { id: 'wallet', icon: Wallet, label: 'Mine' },
+    { id: 'about', icon: Info, label: 'About' },
   ];
 
-  // If admin, replace nav with Admin link or just add it. 
-  // For better UX, Admin gets a different layout or just a button. 
-  // Based on prompt "Admin Panel" and "User Panel", we usually separate them.
-  // But to keep it simple within one Layout, if Admin, we show Admin Dashboard link.
-  
   if (isAdmin) {
-      // Admin sees mainly the Admin Dashboard
-      // But we can let them see user view too.
-      // Let's add an "Admin" tab at the end.
       navItems.push({ id: 'admin', icon: ShieldCheck, label: 'Admin' });
   }
 
@@ -62,16 +56,17 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
             const Icon = item.icon;
+            // Condensed padding/size for 5-6 items
             return (
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={`flex-1 py-3 flex flex-col items-center justify-center space-y-1 transition-all duration-200 ${
+                className={`flex-1 py-2 flex flex-col items-center justify-center space-y-0.5 transition-all duration-200 ${
                   isActive ? 'text-amber-600 bg-amber-50' : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
-                <Icon size={24} strokeWidth={isActive ? 2.5 : 2} />
-                <span className="text-xs font-medium">{item.label}</span>
+                <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                <span className="text-[10px] font-medium">{item.label}</span>
               </button>
             );
           })}
