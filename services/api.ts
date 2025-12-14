@@ -2,22 +2,35 @@ import { AppState, Product, User, AppSettings, Transaction } from '../types';
 
 // PRODUCTION SETUP:
 // Detect if running on localhost for development
-const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const isLocal = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' || 
+    window.location.hostname === '127.0.0.1'
+);
+
+// Detect if running on Vercel
+const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
 
 // Determine API URL:
-// 1. Get Env Var from Vite/Netlify
+// 1. Get Env Var from Vite/Vercel
 const envApiUrl = (import.meta as any).env?.VITE_API_URL;
 
 // 2. Validate: If we are in Production (not isLocal), and the Env Var is "localhost", it is WRONG. Ignore it.
-//    This fixes the issue where Netlify UI has the wrong URL configured.
 const isValidEnvUrl = envApiUrl && (isLocal || !envApiUrl.includes('localhost'));
 
 // 3. Fallback to Render backend provided by user
+// Priority: Valid Env Var -> Localhost (if local) -> Render Backend
 export const API_URL = isValidEnvUrl 
     ? envApiUrl 
     : (isLocal ? 'http://localhost:5000/api' : 'https://royal-hub-backend.onrender.com/api');
 
-console.log("API Service Initialized. Mode:", isLocal ? "Local" : "Production", "Target:", API_URL);
+// Debug logging for easier troubleshooting in Vercel logs
+if (typeof window !== 'undefined') {
+    console.log("Royal Hub API Config:", {
+        environment: isLocal ? "Localhost" : (isVercel ? "Vercel Production" : "Production"),
+        targetUrl: API_URL,
+        envVarFound: !!envApiUrl
+    });
+}
 
 // Helper for Fetch
 const request = async (endpoint: string, options: RequestInit = {}) => {
