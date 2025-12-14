@@ -17,11 +17,13 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// CORS Configuration - Allow all for public access (Vercel -> Render)
+// CORS Configuration - Enhanced for Vercel <-> Render communication
 app.use(cors({
-    origin: '*', 
+    origin: '*', // Allow all origins for public API
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma'],
+    credentials: true,
+    optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
 }));
 
 // MongoDB Connection
@@ -78,7 +80,7 @@ app.use("/api/admin", adminRoute);
 
 // Specific handler for /api to avoid "Cannot GET /api" confusion
 app.get('/api', (req, res) => {
-    res.json({ 
+    res.status(200).json({ 
         status: "Healthy", 
         message: "Royal Hub API is online and ready.", 
         version: "1.0.0" 
@@ -86,7 +88,7 @@ app.get('/api', (req, res) => {
 });
 
 app.get('/', (req, res) => {
-    res.json({ status: "Healthy", time: new Date(), message: "Royal Hub API is running" });
+    res.status(200).json({ status: "Healthy", time: new Date(), message: "Royal Hub API is running" });
 });
 
 // Global Error Handler
