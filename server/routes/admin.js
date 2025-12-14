@@ -1,4 +1,3 @@
-
 import express from 'express';
 import User from '../models/User.js';
 import Settings from '../models/Settings.js';
@@ -38,13 +37,26 @@ router.put('/users/:id', async (req, res) => {
     }
 });
 
+// Delete User (Admin)
+router.delete('/users/:id', async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).json("User not found");
+        if (user.role === 'admin') return res.status(403).json("Cannot delete admin");
+
+        await User.findByIdAndDelete(req.params.id);
+        res.status(200).json("User deleted successfully");
+    } catch (err) {
+        res.status(500).json(err);
+    }
+});
+
 // Approve/Reject Transaction
 router.post('/transaction/:userId/:txId', async (req, res) => {
     const { action } = req.body;
     const { userId, txId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(userId)) return res.status(400).json("Invalid User ID");
-    // txId in subdocument also has ObjectId format usually
     
     try {
         const user = await User.findById(userId);

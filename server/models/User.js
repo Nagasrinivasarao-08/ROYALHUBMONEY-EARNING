@@ -13,10 +13,9 @@ const TransactionSchema = new mongoose.Schema({
     enum: ['pending', 'success', 'failed', 'rejected'],
     default: 'success'
   },
-  // CHANGED: Explicitly use Mixed to allow both Objects (legacy) and Strings (new)
-  // This is critical for preventing "Cast to string failed" errors on existing data.
-  withdrawalDetails: { type: mongoose.Schema.Types.Mixed, default: '' }
-}, { strict: false });
+  // CRITICAL FIX: Use Mixed type. This allows the field to store Objects OR Strings without crashing.
+  withdrawalDetails: { type: mongoose.Schema.Types.Mixed, default: {} }
+}, { strict: false, _id: true }); // Ensure strict is false and _id is true for React keys
 
 const InvestmentSchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },

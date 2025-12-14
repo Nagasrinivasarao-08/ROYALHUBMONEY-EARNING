@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Product, User, AppSettings, Transaction } from '../types';
-import { Plus, Trash2, Users, ShoppingBag, ArrowDownLeft, Settings, Check, X, QrCode, DollarSign, AlertCircle, Clock, ShieldAlert, Image, Building, Lock, AlertTriangle, Edit, RefreshCw, Copy, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, Users, ShoppingBag, ArrowDownLeft, Settings, Check, X, QrCode, DollarSign, AlertCircle, Clock, ShieldAlert, Image, Building, Lock, AlertTriangle, Edit, RefreshCw, Copy, CheckCircle2, Search, UserX, Link } from 'lucide-react';
+import { api } from '../services/api';
 
 interface AdminPanelProps {
   currentUser: User;
@@ -63,6 +63,7 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
 
   const [view, setView] = useState<AdminView>('dashboard');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   
   // Forms State
   const [newProduct, setNewProduct] = useState<Partial<Product>>({
@@ -70,7 +71,6 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [qrForm, setQrForm] = useState(settings);
-  const [adminCreds, setAdminCreds] = useState({ email: currentUser.email, password: '', confirmPassword: '' });
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({ balance: '', password: '' });
 
@@ -83,6 +83,7 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
       price: inv.productSnapshot?.price || 0
   })));
   const totalInvested = allOrders.reduce((sum, order) => sum + (order.price || 0), 0);
+  const totalUserBalance = users.filter(u => u.role !== 'admin').reduce((sum, u) => sum + u.balance, 0);
   const totalPendingWithdrawals = users.reduce((acc, u) => acc + u.transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending').length, 0);
   const totalPendingRecharges = users.reduce((acc, u) => acc + u.transactions.filter(t => t.type === 'recharge' && t.status === 'pending').length, 0);
 
@@ -142,11 +143,29 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
       setEditingUser(null);
   };
 
+  const handleDeleteUser = async (userId: string) => {
+    if (window.confirm("Are you sure you want to PERMANENTLY delete this user? This cannot be undone.")) {
+        try {
+            await api.deleteUser(userId);
+            window.location.reload();
+        } catch (e: any) {
+            alert(e.message);
+        }
+    }
+  };
+
   const copyToClipboard = (text: string, id: string) => {
       navigator.clipboard.writeText(text);
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 2000);
   };
+
+  const filteredUsers = users.filter(u => 
+      u.role !== 'admin' && 
+      (u.username.toLowerCase().includes(searchTerm.toLowerCase()) || 
+       u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+       u.referralCode?.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   // --- Sub-Components (Condensed) ---
   const DashboardView = () => (
@@ -160,15 +179,24 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
                 <p className="text-xs text-gray-500 uppercase">Invested</p>
                 <p className="text-2xl font-bold">₹{totalInvested.toLocaleString()}</p>
             </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-amber-500">
-                <p className="text-xs text-gray-500 uppercase">Pending Recharge</p>
-                <p className="text-2xl font-bold">{totalPendingRecharges}</p>
+             <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-purple-500">
+                <p className="text-xs text-gray-500 uppercase">Wallet Liability</p>
+                <p className="text-2xl font-bold">₹{totalUserBalance.toLocaleString()}</p>
             </div>
             <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-red-500">
                 <p className="text-xs text-gray-500 uppercase">Pending W/D</p>
                 <p className="text-2xl font-bold">{totalPendingWithdrawals}</p>
             </div>
           </div>
+           <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-amber-500">
+                <div className="flex justify-between items-center">
+                    <div>
+                        <p className="text-xs text-gray-500 uppercase">Pending Recharges</p>
+                        <p className="text-2xl font-bold">{totalPendingRecharges}</p>
+                    </div>
+                    <ArrowDownLeft size={32} className="text-amber-500 opacity-20"/>
+                </div>
+            </div>
           
           {/* Environment Warning */}
           {(typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) && (
@@ -205,26 +233,56 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
         {view === 'dashboard' && <DashboardView />}
         
         {view === 'users' && (
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-50 text-xs border-b">
-                        <tr><th className="px-4 py-3">User</th><th className="px-4 py-3 text-right">Balance</th><th className="px-4 py-3">Action</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                        {users.filter(u => u.role !== 'admin').map(u => (
-                            <tr key={u.id}>
-                                <td className="px-4 py-3">
-                                    <div className="font-bold">{u.username}</div>
-                                    <div className="text-xs text-gray-400">{u.email}</div>
-                                </td>
-                                <td className="px-4 py-3 text-right font-bold text-amber-600">₹{u.balance.toFixed(2)}</td>
-                                <td className="px-4 py-3 text-right">
-                                    <button onClick={() => { setEditingUser(u); setEditForm({balance: u.balance.toString(), password: ''}); }} className="bg-gray-100 px-3 py-1.5 rounded text-xs font-bold">Manage</button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+            <div className="space-y-4">
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                    <input 
+                        type="text" 
+                        placeholder="Search by name, email, or code..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:border-amber-500 outline-none"
+                    />
+                </div>
+                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-50 text-xs border-b">
+                            <tr><th className="px-4 py-3">User</th><th className="px-4 py-3 text-right">Balance</th><th className="px-4 py-3 text-right">Action</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {filteredUsers.map(u => (
+                                <tr key={u.id}>
+                                    <td className="px-4 py-3">
+                                        <div className="font-bold text-gray-900">{u.username}</div>
+                                        <div className="text-[10px] text-gray-400">{u.email}</div>
+                                        <div className="flex gap-2 mt-1">
+                                            <span className="text-[10px] bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded border border-amber-100">
+                                                Code: {u.referralCode}
+                                            </span>
+                                            {u.referredBy && (
+                                                <span className="text-[10px] bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded border border-blue-100">
+                                                    Ref: {u.referredBy}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-right font-bold text-amber-600">₹{u.balance.toFixed(2)}</td>
+                                    <td className="px-4 py-3 text-right">
+                                        <div className="flex justify-end gap-2">
+                                            <button onClick={() => { setEditingUser(u); setEditForm({balance: u.balance.toString(), password: ''}); }} className="bg-gray-100 p-2 rounded text-gray-600 hover:bg-gray-200">
+                                                <Edit size={14} />
+                                            </button>
+                                            <button onClick={() => handleDeleteUser(u.id)} className="bg-red-50 p-2 rounded text-red-500 hover:bg-red-100">
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    {filteredUsers.length === 0 && <p className="text-center py-4 text-gray-500 text-sm">No users found.</p>}
+                </div>
             </div>
         )}
 
@@ -267,8 +325,8 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
                         </div>
                          <div className="text-xs text-gray-400 mb-2">Current Bal: ₹{tx.currentBalance.toFixed(2)}</div>
                         <div className="flex gap-2 mt-2">
-                            <button onClick={()=>onApproveRecharge(tx.userId!, tx.id)} className="flex-1 bg-green-600 text-white py-1 rounded text-xs">Approve</button>
-                            <button onClick={()=>onRejectRecharge(tx.userId!, tx.id)} className="flex-1 bg-red-100 text-red-600 py-1 rounded text-xs">Reject</button>
+                            <button onClick={()=>onApproveRecharge(tx.userId!, tx.id)} className="flex-1 bg-green-600 text-white py-1 rounded text-xs font-bold">Approve</button>
+                            <button onClick={()=>onRejectRecharge(tx.userId!, tx.id)} className="flex-1 bg-red-100 text-red-600 py-1 rounded text-xs font-bold">Reject</button>
                         </div>
                     </div>
                 ))}
@@ -285,15 +343,12 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
                     
                     try {
                         if (typeof raw === 'string') {
-                            // Attempt to parse JSON string
                             if (raw.trim().startsWith('{')) {
                                 detailsObj = JSON.parse(raw);
                             } else {
-                                // Fallback for plain text legacy data
                                 detailsObj = { details: raw };
                             }
                         } else if (typeof raw === 'object' && raw !== null) {
-                             // Handle case where Mongoose might return mixed/object
                             detailsObj = raw;
                         } else {
                              detailsObj = { details: 'No details available' };
@@ -302,12 +357,9 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
                         detailsObj = { details: String(raw) };
                     }
 
-                    // Determine display values
                     const displayMethod = detailsObj.method || 'bank'; 
-                    // Use 'details' first, then 'info', then fall back to raw stringified if needed
                     const displayDetails = detailsObj.details || detailsObj.info || (typeof raw === 'string' ? raw : JSON.stringify(raw));
                     
-                    // Improved UPI detection
                     const isUpi = displayMethod === 'upi' || 
                                  (typeof displayDetails === 'string' && displayDetails.includes('@') && !displayDetails.includes('IFSC'));
                     
@@ -331,7 +383,6 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
                                 {isUpi ? <QrCode size={12} className="mr-1"/> : <Building size={12} className="mr-1"/>}
                                 {isUpi ? 'UPI TRANSFER' : 'BANK TRANSFER'}
                             </div>
-                            {/* whitespace-pre-wrap ensures newlines in bank details are preserved */}
                             <div className="bg-white border border-blue-200 p-2 rounded text-sm font-mono text-gray-700 break-all pr-8 whitespace-pre-wrap">
                                 {displayDetails || <span className="text-red-400 italic font-bold">MISSING DATA</span>}
                             </div>
@@ -366,7 +417,6 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
                 )})}
                  {getAllTransactions('withdrawal').filter(t => t.status === 'pending').length === 0 && <p className="text-center text-xs text-gray-400">No pending withdrawals</p>}
                  
-                 {/* Withdrawal History (Condensed) */}
                  <div className="mt-8 pt-4 border-t border-gray-200">
                     <h4 className="font-bold text-sm text-gray-700 mb-3 flex items-center"><Clock size={16} className="mr-1"/> History</h4>
                     <div className="space-y-2 opacity-75">
@@ -403,10 +453,15 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                  <div className="bg-white rounded-lg p-6 w-full max-w-sm">
                      <h3 className="font-bold mb-4">Manage {editingUser.username}</h3>
-                     <input type="number" className="w-full border p-2 mb-2 rounded" value={editForm.balance} onChange={e=>setEditForm({...editForm, balance: e.target.value})} placeholder="New Balance" />
+                     <label className="block text-xs font-bold text-gray-600 mb-1">Wallet Balance</label>
+                     <input type="number" className="w-full border p-2 mb-4 rounded" value={editForm.balance} onChange={e=>setEditForm({...editForm, balance: e.target.value})} placeholder="New Balance" />
+                     
+                     <label className="block text-xs font-bold text-gray-600 mb-1">Reset Password</label>
+                     <input type="text" className="w-full border p-2 mb-4 rounded" value={editForm.password} onChange={e=>setEditForm({...editForm, password: e.target.value})} placeholder="New Password" />
+                     
                      <div className="flex gap-2 mt-4">
                          <button onClick={()=>setEditingUser(null)} className="flex-1 py-2 bg-gray-200 rounded">Cancel</button>
-                         <button onClick={handleSaveUser} className="flex-1 py-2 bg-green-600 text-white rounded">Save</button>
+                         <button onClick={handleSaveUser} className="flex-1 py-2 bg-green-600 text-white rounded font-bold">Save Changes</button>
                      </div>
                  </div>
              </div>

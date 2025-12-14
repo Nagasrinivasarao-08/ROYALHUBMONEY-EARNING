@@ -42,11 +42,7 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
         const res = await fetch(url, { 
             ...options, 
             headers,
-            // CORS Mode:
-            // When 'cors' is used, browser ensures headers match backend.
             mode: 'cors', 
-            // Credentials:
-            // MUST be 'omit' if backend Access-Control-Allow-Origin is '*'
             credentials: 'omit'
         });
         
@@ -68,17 +64,21 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
     } catch (error: any) {
         console.error(`API Error at ${endpoint}:`, error);
         
-        if (error.message === 'Failed to fetch' || error.message.includes('NetworkError') || error.name === 'TypeError') {
-            // Check if it might be a mixed content issue (HTTP vs HTTPS)
-            const isHttps = window.location.protocol === 'https:';
+        if (error.name === 'TypeError' && (error.message === 'Failed to fetch' || error.message.includes('NetworkError'))) {
+            const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
             const targetIsHttp = API_URL.startsWith('http:');
-            
+
             if (isHttps && targetIsHttp) {
-                throw new Error(`Security Error: Cannot connect to insecure backend (${API_URL}) from secure site. Please update VITE_API_URL to https.`);
+                throw new Error(`Security Block: Mixed Content. You are using a secure site (HTTPS) but trying to connect to an insecure backend (${API_URL}). Browsers block this. Please update VITE_API_URL to use 'https://'.`);
             }
 
-            throw new Error(`Server Unreachable at ${API_URL}. If you are the admin, check if the Backend is deployed and running.`);
+            if (typeof navigator !== 'undefined' && !navigator.onLine) {
+                throw new Error("No Internet Connection. Please check your network settings.");
+            }
+
+            throw new Error(`Connection Failed: Unable to reach the server at ${API_URL}. The server might be down, or 'Access-Control-Allow-Origin' CORS headers are missing.`);
         }
+        
         throw error;
     }
 };
@@ -178,6 +178,10 @@ export const api = {
     updateUser: (userId: string, updates: any) => request(`/admin/users/${userId}`, {
         method: 'PUT',
         body: JSON.stringify(updates)
+    }),
+
+    deleteUser: (userId: string) => request(`/admin/users/${userId}`, {
+        method: 'DELETE'
     }),
     
     resetData: () => request('/admin/reset', { method: 'POST' })

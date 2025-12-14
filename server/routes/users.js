@@ -9,7 +9,6 @@ const router = express.Router();
 // Middleware to validate Object IDs
 const validateId = (req, res, next) => {
     const id = req.params.id || req.body.userId;
-    // CRITICAL FIX: Explicitly check for "undefined" or "null" strings before Mongoose validation
     if (!id || id === 'undefined' || id === 'null') {
         return res.status(400).json({ message: "Invalid User ID provided (Missing or Undefined)" });
     }
@@ -27,10 +26,28 @@ router.get('/:id', validateId, async (req, res) => {
     if(!user) return res.status(404).json({ message: "User not found" });
     
     const { password, ...others } = user._doc;
+    
+    // Normalize transactions to ensure frontend stability
+    const sanitizedTransactions = user.transactions.map(t => {
+        let cleanDetails = '';
+        // If it's an object (legacy data), stringify it so frontend receives a consistent string
+        if (t.withdrawalDetails && typeof t.withdrawalDetails === 'object') {
+            cleanDetails = JSON.stringify(t.withdrawalDetails);
+        } else {
+            cleanDetails = String(t.withdrawalDetails || '');
+        }
+
+        return {
+            ...t._doc,
+            id: t._id.toString(),
+            withdrawalDetails: cleanDetails
+        };
+    });
+
     const formattedUser = {
         ...others,
         id: user._id.toString(),
-        transactions: user.transactions.map(t => ({...t._doc, id: t._id.toString()})),
+        transactions: sanitizedTransactions,
         investments: user.investments.map(i => ({...i._doc, id: i._id.toString()}))
     };
     
@@ -79,7 +96,7 @@ router.post('/invest', validateId, async (req, res) => {
             amount: product.price,
             status: 'success',
             date: new Date(),
-            withdrawalDetails: '' // Explicit empty string
+            withdrawalDetails: '' 
         });
 
         // 4. Referral Logic (First Investment Only)
@@ -93,7 +110,7 @@ router.post('/invest', validateId, async (req, res) => {
                     amount: bonusAmount,
                     status: 'success',
                     date: new Date(),
-                    withdrawalDetails: '' // Explicit empty string
+                    withdrawalDetails: '' 
                 });
                 await referrer.save();
             }
@@ -139,7 +156,7 @@ router.post('/claim', validateId, async (req, res) => {
                 amount: totalClaim,
                 status: 'success',
                 date: now,
-                withdrawalDetails: '' // Explicit empty string
+                withdrawalDetails: ''
             });
             await user.save();
             res.status(200).json({ message: "Claim successful", amount: totalClaim });

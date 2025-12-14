@@ -44,22 +44,17 @@ function App() {
 
   // --- Data Fetching ---
 
-  // Enhanced retry logic for Render Free Tier (Cold Starts can take 60s+)
   const fetchWithRetry = async (currentUser: User | null, retries = 20, delay = 3000): Promise<boolean> => {
       try {
           const data = await api.getInitialState(currentUser);
-          
-          // Strict User Sync: If backend returns null for currentUser, we must reflect that
           const isValidUser = !!data.currentUser;
           
           setState(prev => ({
               ...prev,
               ...data,
-              // If data.currentUser is null, it means session is invalid/expired
               currentUser: data.currentUser
           }));
 
-          // If we expected a user but got none, update auth state
           if (currentUser && !isValidUser) {
               setIsAuth(false);
               localStorage.removeItem('royal_user_id');
@@ -88,11 +83,9 @@ function App() {
           setState(prev => ({
               ...prev,
               ...data,
-              // If backend returns null, user is logged out on server
               currentUser: data.currentUser 
           }));
           
-          // Force logout if backend says token invalid
           if (state.currentUser && !data.currentUser) {
               setIsAuth(false);
               localStorage.removeItem('royal_user_id');
@@ -101,6 +94,8 @@ function App() {
           setConnectionError(false);
       } catch (error) {
           console.error("Failed to fetch data:", error);
+          // Only trigger full screen error if we have NO data. 
+          // If we have data, we just stay silent and try again next interval.
           if (!connectionError && !state.products.length) setConnectionError(true);
       }
   };
@@ -114,10 +109,8 @@ function App() {
         const storedUserId = localStorage.getItem('royal_user_id');
         let restoredUser = null;
         
-        // Safety: Check if stored ID is strictly valid
         if (storedUserId && storedUserId !== 'undefined' && storedUserId !== 'null') {
             try {
-                // Optimistically set ID for the initial state fetch
                 restoredUser = { id: storedUserId } as User;
                 setIsAuth(true); 
             } catch (err) {
@@ -127,10 +120,6 @@ function App() {
 
         try {
             await fetchWithRetry(restoredUser);
-            
-            // Check state immediately after fetch
-            // We need to look at the result of the fetch, but state updates are async.
-            // So we rely on fetchWithRetry to handle the state update logic above.
             setConnectionError(false);
         } catch (error: any) {
             console.error("Init failed after retries:", error);
@@ -147,7 +136,8 @@ function App() {
       if (!isAuth) return;
 
       const isAdmin = state.currentUser?.role === 'admin';
-      const intervalTime = isAdmin ? 5000 : 15000; 
+      // INCREASED INTERVAL: 10s for Admin, 30s for User to prevent glitching/flickering
+      const intervalTime = isAdmin ? 10000 : 30000; 
 
       const interval = setInterval(() => {
           if (state.currentUser && state.currentUser.id && state.currentUser.id !== 'undefined') {
@@ -160,24 +150,16 @@ function App() {
   const handleLogin = async (email: string, password: string) => {
       try {
           const user = await api.login(email, password);
-          
           if (!user || !user.id || user.id === 'undefined') {
               throw new Error("Login failed: Invalid server response (Missing ID)");
           }
-
           localStorage.setItem('royal_user_id', user.id);
-          
           setState(prev => ({ ...prev, currentUser: user }));
           setIsAuth(true);
           showToast(`Welcome back, ${user.username}!`, 'success');
-          
           fetchData();
-
-          if (user.role === 'admin') {
-              setActiveTab('admin');
-          } else {
-              setActiveTab('dashboard');
-          }
+          if (user.role === 'admin') setActiveTab('admin');
+          else setActiveTab('dashboard');
       } catch (err: any) {
           throw new Error(err.message || 'Login failed');
       }
@@ -186,20 +168,15 @@ function App() {
   const handleRegister = async (data: any) => {
       try {
           const user = await api.register(data);
-          
           if (!user || !user.id || user.id === 'undefined') {
               throw new Error("Registration failed: Invalid server response (Missing ID)");
           }
-
           localStorage.setItem('royal_user_id', user.id);
-
           setState(prev => ({ ...prev, currentUser: user }));
           setIsAuth(true);
           setActiveTab('dashboard');
           showToast('Registration successful! Welcome to Royal Hub.', 'success');
-          
           fetchData();
-
       } catch (err: any) {
           throw new Error(err.message || 'Registration failed');
       }
@@ -443,7 +420,6 @@ function App() {
 
   return (
     <>
-        {/* Toast Container */}
         <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col gap-2 w-full max-w-sm px-4">
             {toasts.map(toast => (
                 <div key={toast.id} className={`shadow-xl rounded-lg p-4 flex items-center justify-between text-white animate-slide-up ${
