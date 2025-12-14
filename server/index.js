@@ -1,6 +1,5 @@
 import express from 'express';
 import mongoose from 'mongoose';
-import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoute from './routes/auth.js';
 import productRoute from './routes/products.js';
@@ -13,20 +12,33 @@ dotenv.config();
 
 const app = express();
 
-// 1. CORS CONFIGURATION (Must be first)
-// This configuration allows credentials and handles the preflight requests correctly.
-app.use(cors({
-    origin: true, // Automatically reflect the request origin
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'X-Requested-With']
-}));
+// --- MANUAL CORS MIDDLEWARE ---
+// This overrides any library defaults and forces permissive CORS
+app.use((req, res, next) => {
+    // Allow any origin
+    res.header('Access-Control-Allow-Origin', '*');
+    
+    // Allow standard methods
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    
+    // Allow headers that the frontend might send
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    
+    // Handle Preflight strictly
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    
+    next();
+});
 
-// Handle preflight requests explicitly for all routes
-app.options('*', cors());
+// Request Logging
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+});
 
-// 2. Body Parsers (Must be after CORS)
-// INCREASED LIMIT: Fixes issues where uploading product images or QR codes failed
+// Body Parsers
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -50,14 +62,11 @@ const seedAdmin = async () => {
             });
             await admin.save();
             console.log('✅ Default Admin Account Seeded');
-            console.log('   Email: srinivas@gmail.com');
-            console.log('   Pass:  srinivas@9121');
         } else {
-            // Ensure role is admin if it exists
-            if (exists.role !== 'admin') {
+             if (exists.role !== 'admin') {
                 exists.role = 'admin';
                 await exists.save();
-                console.log('✅ Updated permissions for srinivas@gmail.com to Admin');
+                console.log('✅ Updated permissions for Admin');
             }
         }
     } catch (err) {
@@ -81,31 +90,27 @@ app.use("/api/users", userRoute);
 app.use("/api/transactions", txRoute);
 app.use("/api/admin", adminRoute);
 
-// Specific handler for /api to avoid "Cannot GET /api" confusion
+// Root Health Check
 app.get('/api', (req, res) => {
     res.status(200).json({ 
         status: "Healthy", 
-        message: "Royal Hub API is online and ready.", 
-        version: "1.0.0" 
+        message: "Royal Hub API is online", 
+        version: "1.0.2",
+        cors: "Manual Middleware"
     });
 });
 
 app.get('/', (req, res) => {
-    res.status(200).json({ status: "Healthy", time: new Date(), message: "Royal Hub API is running" });
+    res.status(200).json({ status: "Healthy", service: "Royal Hub Backend" });
 });
 
 // Global Error Handler
 app.use((err, req, res, next) => {
-    if (res.headersSent) {
-        return next(err);
-    }
-    console.error("Unhandled Server Error:", err.stack);
-    
-    // Provide a standardized error response
+    if (res.headersSent) return next(err);
+    console.error("Server Error:", err);
     res.status(500).json({ 
         message: "Internal Server Error", 
-        error: "An unexpected error occurred on the server.",
-        details: process.env.NODE_ENV === 'development' ? err.message : undefined 
+        error: err.message 
     });
 });
 
@@ -113,5 +118,4 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`🚀 Backend server is running on port ${PORT}`);
-  console.log(`📡 Ready to accept connections`);
 });
