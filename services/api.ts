@@ -7,9 +7,6 @@ const isLocal = typeof window !== 'undefined' && (
     window.location.hostname === '127.0.0.1'
 );
 
-// Detect if running on Vercel
-const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
-
 // Determine API URL:
 // 1. Get Env Var from Vite/Vercel
 const envApiUrl = (import.meta as any).env?.VITE_API_URL;
@@ -18,15 +15,21 @@ const envApiUrl = (import.meta as any).env?.VITE_API_URL;
 const isValidEnvUrl = envApiUrl && (isLocal || !envApiUrl.includes('localhost'));
 
 // 3. Fallback to Render backend provided by user
-// Priority: Valid Env Var -> Localhost (if local) -> Render Backend
-export const API_URL = isValidEnvUrl 
+let baseUrl = isValidEnvUrl 
     ? envApiUrl 
     : (isLocal ? 'http://localhost:5000/api' : 'https://royal-hub-backend.onrender.com/api');
+
+// Remove trailing slash if present to avoid double slashes (e.g. .../api//products)
+if (baseUrl.endsWith('/')) {
+    baseUrl = baseUrl.slice(0, -1);
+}
+
+export const API_URL = baseUrl;
 
 // Debug logging for easier troubleshooting in Vercel logs
 if (typeof window !== 'undefined') {
     console.log("Royal Hub API Config:", {
-        environment: isLocal ? "Localhost" : (isVercel ? "Vercel Production" : "Production"),
+        environment: isLocal ? "Localhost" : "Production",
         targetUrl: API_URL,
         envVarFound: !!envApiUrl
     });
@@ -35,8 +38,11 @@ if (typeof window !== 'undefined') {
 // Helper for Fetch
 const request = async (endpoint: string, options: RequestInit = {}) => {
     try {
+        // Ensure endpoint starts with /
+        const safeEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+        
         // CACHE BUSTING: Add a timestamp to every GET request to prevent stale data
-        let url = `${API_URL}${endpoint}`;
+        let url = `${API_URL}${safeEndpoint}`;
         if (!options.method || options.method === 'GET') {
             const separator = url.includes('?') ? '&' : '?';
             url = `${url}${separator}_t=${Date.now()}`;
@@ -77,7 +83,7 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
         
         // Handle Network Errors (Server down, offline, CORS)
         if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
-            throw new Error(`Server Unreachable. Please check your internet connection or ensure the backend is running.`);
+            throw new Error(`Server Unreachable. The backend may be sleeping or offline.`);
         }
         
         // Pass through the specific error message

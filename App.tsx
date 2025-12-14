@@ -10,7 +10,7 @@ import { Referral } from './components/Referral';
 import { About } from './components/About';
 import { AppState, Product, User, AppSettings } from './types';
 import { api } from './services/api';
-import { CheckCircle, AlertTriangle, XCircle, Info, Loader2, Server } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, Info, Loader2, Server, RefreshCw } from 'lucide-react';
 
 // --- Toast Notification System ---
 interface Toast {
@@ -31,7 +31,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [connectionError, setConnectionError] = useState(false);
-  const [loadingTime, setLoadingTime] = useState(0);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
       const id = Date.now();
@@ -43,9 +44,8 @@ function App() {
 
   // --- Data Fetching ---
 
-  // Helper to fetch data with retries
-  // This is crucial for Render free tier which sleeps and takes ~30-60s to wake up
-  const fetchWithRetry = async (currentUser: User | null, retries = 3, delay = 2000): Promise<boolean> => {
+  // Enhanced retry logic for Render Free Tier (Cold Starts can take 60s+)
+  const fetchWithRetry = async (currentUser: User | null, retries = 20, delay = 3000): Promise<boolean> => {
       try {
           const data = await api.getInitialState(currentUser);
           setState(prev => ({
@@ -54,11 +54,15 @@ function App() {
               currentUser: data.currentUser || prev.currentUser
           }));
           return true;
-      } catch (error) {
-          console.warn(`Fetch attempt failed. Retries left: ${retries}`, error);
+      } catch (error: any) {
+          const attempt = 20 - retries + 1;
+          console.warn(`Fetch attempt ${attempt} failed. Retries left: ${retries}`, error);
+          setRetryCount(attempt);
+          setErrorMessage(error.message || 'Unknown error');
+          
           if (retries > 0) {
               await new Promise(resolve => setTimeout(resolve, delay));
-              return fetchWithRetry(currentUser, retries - 1, delay * 1.5); // Exponential backoff
+              return fetchWithRetry(currentUser, retries - 1, delay); 
           }
           throw error;
       }
@@ -76,47 +80,46 @@ function App() {
           setConnectionError(false);
       } catch (error) {
           console.error("Failed to fetch data:", error);
-          if (!connectionError) setConnectionError(true);
+          // Only show full error screen if we completely lose connection and aren't just polling
+          if (!connectionError && !state.products.length) setConnectionError(true);
       }
   };
-
-  // Timer to track loading duration for UX feedback
-  useEffect(() => {
-      let interval: any;
-      if (isLoading) {
-          interval = setInterval(() => {
-              setLoadingTime(prev => prev + 1);
-          }, 1000);
-      }
-      return () => clearInterval(interval);
-  }, [isLoading]);
 
   useEffect(() => {
       const init = async () => {
         setIsLoading(true);
+        setConnectionError(false);
         const storedUserId = localStorage.getItem('royal_user_id');
         let restoredUser = null;
         
         // Safety: Check if stored ID is strictly valid
         if (storedUserId && storedUserId !== 'undefined' && storedUserId !== 'null') {
             try {
-                restoredUser = await api.getUser(storedUserId);
-                setIsAuth(true);
-                if (restoredUser.role === 'admin') setActiveTab('admin');
-                showToast(`Welcome back, ${restoredUser.username}`, 'success');
+                // We don't fetch full user here, just optimistically set ID for the initial state fetch
+                // The actual user object will be populated by getInitialState
+                restoredUser = { id: storedUserId } as User;
+                setIsAuth(true); // Optimistically auth
             } catch (err) {
-                console.warn("Session restore failed or invalid ID, clearing storage");
                 localStorage.removeItem('royal_user_id');
             }
         }
 
         try {
-            // Attempt to fetch initial state with retries
-            await fetchWithRetry(restoredUser, 4, 2000); // 4 Retries, starting at 2s delay
+            // Attempt to fetch initial state with heavy retries
+            await fetchWithRetry(restoredUser);
+            
+            // If successful, check if we got a real user back
+            const finalState = await api.getInitialState(restoredUser);
+            if (finalState.currentUser) {
+                 showToast(`Welcome back, ${finalState.currentUser.username}`, 'success');
+                 if (finalState.currentUser.role === 'admin') setActiveTab('admin');
+            }
+            
             setConnectionError(false);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Init failed after retries:", error);
             setConnectionError(true);
+            setErrorMessage(error.message);
         } finally {
             setIsLoading(false);
         }
@@ -128,10 +131,9 @@ function App() {
       if (!isAuth) return;
 
       const isAdmin = state.currentUser?.role === 'admin';
-      const intervalTime = isAdmin ? 5000 : 10000; // Poll less frequently to reduce load
+      const intervalTime = isAdmin ? 5000 : 15000; 
 
       const interval = setInterval(() => {
-          // Strictly ensure we have a valid user ID before polling
           if (state.currentUser && state.currentUser.id && state.currentUser.id !== 'undefined') {
             fetchData();
           }
@@ -153,7 +155,6 @@ function App() {
           setIsAuth(true);
           showToast(`Welcome back, ${user.username}!`, 'success');
           
-          // Initial fetch after login
           fetchData();
 
           if (user.role === 'admin') {
@@ -181,7 +182,6 @@ function App() {
           setActiveTab('dashboard');
           showToast('Registration successful! Welcome to Royal Hub.', 'success');
           
-          // Initial fetch after register
           fetchData();
 
       } catch (err: any) {
@@ -345,14 +345,18 @@ function App() {
   const handleRetryConnection = () => {
       setIsLoading(true);
       setConnectionError(false);
-      setLoadingTime(0);
+      setRetryCount(0);
+      setErrorMessage('');
       
       const storedUserId = localStorage.getItem('royal_user_id');
       const mockUser = storedUserId ? { id: storedUserId } as User : null;
       
-      fetchWithRetry(mockUser, 3, 2000)
+      fetchWithRetry(mockUser)
         .then(() => setConnectionError(false))
-        .catch(() => setConnectionError(true))
+        .catch((e) => {
+            setConnectionError(true);
+            setErrorMessage(e.message);
+        })
         .finally(() => setIsLoading(false));
   };
 
@@ -366,18 +370,18 @@ function App() {
                       <Loader2 size={48} className="animate-spin mx-auto text-amber-500 relative z-10" />
                   </div>
                   <h2 className="text-xl font-bold mb-3 tracking-wide">Connecting to Royal Hub</h2>
-                  <p className="text-amber-100/70 text-sm mb-6">
-                      Securely establishing connection with the banking server...
+                  <p className="text-amber-100/70 text-sm mb-4">
+                      Establishing secure connection...
                   </p>
                   
-                  {loadingTime > 3 && (
+                  {retryCount > 1 && (
                       <div className="bg-black/20 rounded-lg p-3 animate-fadeIn">
                           <div className="flex items-center justify-center text-xs text-amber-400 mb-1">
                               <Server size={12} className="mr-1.5" />
-                              <span>Waking up server...</span>
+                              <span>Waking up server (Attempt {retryCount}/20)</span>
                           </div>
                           <p className="text-[10px] text-gray-400">
-                              This initial connection may take up to 60 seconds on the free tier.
+                              Please wait. The backend is waking up from sleep mode. This can take up to 60 seconds.
                           </p>
                       </div>
                   )}
@@ -397,17 +401,24 @@ function App() {
                   <p className="text-gray-600 mb-4 text-sm">
                       Could not connect to the Royal Hub Backend.
                   </p>
+                  
+                  {errorMessage && (
+                      <div className="bg-red-50 p-2 rounded mb-4 border border-red-100">
+                          <p className="text-xs text-red-600 font-mono break-all">{errorMessage}</p>
+                      </div>
+                  )}
+
                   <div className="bg-gray-100 p-3 rounded mb-6 border border-gray-200 text-left">
-                      <p className="text-[10px] text-gray-400 uppercase font-bold mb-1">Attempted Target</p>
+                      <p className="text-[10px] text-gray-400 uppercase font-bold mb-1">Target URL</p>
                       <p className="text-xs text-gray-800 font-mono break-all bg-white p-1 rounded border border-gray-200">
                           {api.getBaseUrl()}
                       </p>
                   </div>
                   <button 
                     onClick={handleRetryConnection}
-                    className="w-full bg-amber-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-amber-700 transition-colors shadow-lg"
+                    className="w-full bg-amber-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-amber-700 transition-colors shadow-lg flex items-center justify-center"
                   >
-                      Retry Connection
+                      <RefreshCw size={18} className="mr-2" /> Retry Connection
                   </button>
               </div>
           </div>
