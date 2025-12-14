@@ -1,4 +1,3 @@
-
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -74,6 +73,15 @@ app.use("/api/products", productRoute);
 app.use("/api/users", userRoute);
 app.use("/api/transactions", txRoute);
 app.use("/api/admin", adminRoute);
+
+// Specific handler for /api to avoid "Cannot GET /api" confusion
+app.get('/api', (req, res) => {
+    res.json({ 
+        status: "Healthy", 
+        message: "Royal Hub API is online and ready.", 
+        version: "1.0.0" 
+    });
+});
 
 app.get('/', (req, res) => {
     res.json({ status: "Healthy", time: new Date(), message: "Royal Hub API is running" });
