@@ -15,9 +15,10 @@ const envApiUrl = (import.meta as any).env?.VITE_API_URL;
 const isValidEnvUrl = envApiUrl && (isLocal || !envApiUrl.includes('localhost'));
 
 // 3. Fallback to Render backend provided by user
+// FIXED: Added '/api' to the production URL so it matches the server routes
 let baseUrl = isValidEnvUrl 
     ? envApiUrl 
-    : (isLocal ? 'http://localhost:5000/api' : 'https://royal-hub-backend.onrender.com/');
+    : (isLocal ? 'http://localhost:5000/api' : 'https://royal-hub-backend.onrender.com/api');
 
 // Remove trailing slash if present to avoid double slashes (e.g. .../api//products)
 if (baseUrl.endsWith('/')) {
