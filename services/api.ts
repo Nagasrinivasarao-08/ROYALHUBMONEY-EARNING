@@ -17,7 +17,7 @@ const isValidEnvUrl = envApiUrl && (isLocal || !envApiUrl.includes('localhost'))
 // 3. Fallback to Render backend provided by user
 let baseUrl = isValidEnvUrl 
     ? envApiUrl 
-    : (isLocal ? 'http://localhost:5000/api' : 'https://royal-hub-backend.onrender.com/api');
+    : (isLocal ? 'http://localhost:5000/api' : 'https://royal-hub-backend.onrender.com/');
 
 // Remove trailing slash if present to avoid double slashes (e.g. .../api//products)
 if (baseUrl.endsWith('/')) {
