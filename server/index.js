@@ -22,7 +22,8 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
     
     // Allow headers that the frontend might send
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    // ADDED: 'x-user-id' is required for the new security check
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-user-id');
     
     // Handle Preflight strictly
     if (req.method === 'OPTIONS') {
@@ -100,8 +101,8 @@ app.get('/api', (req, res) => {
     res.status(200).json({ 
         status: "Healthy", 
         message: "Royal Hub API is online", 
-        version: "1.0.2",
-        cors: "Manual Middleware"
+        version: "1.0.3",
+        cors: "Enabled with x-user-id"
     });
 });
 
