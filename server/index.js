@@ -55,8 +55,67 @@ const seedAdmin = async () => {
         if (!exists) {
             const admin = new User({
                 username: 'Admin',
-                e
-                
+                email: adminEmail,
+                password: 'srinivas@9121', 
+                role: 'admin',
+                referralCode: 'ADMIN',
+                balance: 0
+            });
+            await admin.save();
+            console.log('✅ Default Admin Account Seeded');
+        } else {
+             if (exists.role !== 'admin') {
+                exists.role = 'admin';
+                await exists.save();
+                console.log('✅ Updated permissions for Admin');
+            }
+        }
+    } catch (err) {
+        console.error('❌ Admin seeding failed:', err);
+    }
+};
+
+mongoose.connect(MONGO_URL)
+  .then((conn) => {
+      console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+      seedAdmin();
+  })
+  .catch((err) => {
+      console.error("❌ MongoDB Connection Error:", err);
+  });
+
+// Routes
+app.use("/api/auth", authRoute);
+app.use("/api/products", productRoute);
+app.use("/api/users", userRoute);
+app.use("/api/transactions", txRoute);
+app.use("/api/admin", adminRoute);
+
+// Dedicated Health Check for Wake-up
+app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: "OK", timestamp: Date.now() });
+});
+
+// Root Health Check
+app.get('/api', (req, res) => {
+    res.status(200).json({ 
+        status: "Healthy", 
+        message: "Royal Hub API is online", 
+        version: "1.0.3",
+        cors: "Enabled with x-user-id"
+    });
+});
+
+app.get('/', (req, res) => {
+    res.status(200).json({ status: "Healthy", service: "Royal Hub Backend" });
+});
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+    if (res.headersSent) return next(err);
+    console.error("Server Error:", err);
+    res.status(500).json({ 
+        message: "Internal Server Error", 
         error: err.message 
     });
 });
