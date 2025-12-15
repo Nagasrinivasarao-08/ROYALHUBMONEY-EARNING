@@ -90,6 +90,11 @@ app.use("/api/users", userRoute);
 app.use("/api/transactions", txRoute);
 app.use("/api/admin", adminRoute);
 
+// Dedicated Health Check for Wake-up
+app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: "OK", timestamp: Date.now() });
+});
+
 // Root Health Check
 app.get('/api', (req, res) => {
     res.status(200).json({ 

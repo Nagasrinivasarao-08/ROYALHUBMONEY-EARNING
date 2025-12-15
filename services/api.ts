@@ -85,6 +85,9 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
 
 export const api = {
     getBaseUrl: () => API_URL,
+    
+    // Health Check for Fast Wakeup
+    checkHealth: () => request('/health', { method: 'GET' }),
 
     // Auth
     login: (email: string, password: string) => request('/auth/login', {
