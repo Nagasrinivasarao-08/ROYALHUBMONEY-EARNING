@@ -34,8 +34,12 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
             url = `${url}${separator}_t=${Date.now()}`;
         }
 
+        // SECURITY: Retrieve current user ID to send in headers
+        const currentUserId = typeof localStorage !== 'undefined' ? localStorage.getItem('royal_user_id') : '';
+
         const headers: HeadersInit = {
             'Content-Type': 'application/json',
+            'x-user-id': currentUserId || '', // Send User ID for Backend Role Verification
             ...options.headers
         };
 
@@ -111,8 +115,14 @@ export const api = {
         if (currentUser && currentUser.id && currentUser.id !== 'undefined' && currentUser.id !== 'null') {
             try {
                 refreshedUser = await request(`/users/${currentUser.id}`);
+                // Only try to fetch admin user list if the role matches
                 if (refreshedUser.role === 'admin') {
-                    users = await request('/admin/users');
+                    try {
+                        users = await request('/admin/users');
+                    } catch (e) {
+                        // If admin fetch fails (e.g. security block), just return empty list
+                        users = [];
+                    }
                 } else {
                     users = [refreshedUser];
                 }

@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import { User, AppSettings } from '../types';
 import { QrCode, ArrowDownLeft, ArrowUpRight, History, Filter, ArrowUpDown, Gift, Copy, Check, TrendingUp, ShoppingBag, XCircle, CreditCard, Building, ArrowLeft } from 'lucide-react';
@@ -120,10 +118,18 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
   // Logic to determine QR Display
   const getQrUrl = () => {
       if (settings.upiId && Number(amount) > 0) {
-          const upiLink = `upi://pay?pa=${settings.upiId}&pn=RoyalHub&am=${formattedAmount}&cu=INR&tn=Recharge`;
-          return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiLink)}`;
+          // Construct UPI URI properly with encoding
+          const upiParams = new URLSearchParams();
+          upiParams.append('pa', settings.upiId);
+          upiParams.append('pn', 'Royal Hub'); 
+          upiParams.append('am', formattedAmount);
+          upiParams.append('cu', 'INR');
+          upiParams.append('tn', 'Recharge');
+          
+          const upiLink = `upi://pay?${upiParams.toString()}`;
+          return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upiLink)}`;
       }
-      return settings.qrCodeUrl;
+      return settings.qrCodeUrl || '';
   };
 
   const qrImage = getQrUrl();
@@ -218,7 +224,7 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
                             <div>
                                 <p className="text-amber-600 font-bold text-3xl">₹{formattedAmount}</p>
                                 <p className="text-xs text-gray-500 mt-1">
-                                    {settings.upiId ? 'Dynamic QR with amount generated' : 'Scan the Admin QR Code'}
+                                    {settings.upiId ? 'Dynamic UPI QR generated' : 'Scan the Static QR Code'}
                                 </p>
                                 
                                 {settings.upiId && (

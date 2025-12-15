@@ -41,24 +41,17 @@ export const AdminPanel: React.FC<AdminPanelProps & { onRefresh?: () => void }> 
     onUpdateUser,
     onRefresh 
 }) => {
-  // Security Check
+  
+  // Strict Security Check: Redirect immediately if not admin
   useEffect(() => {
-    if (currentUser && currentUser.role !== 'admin') {
-      const timer = setTimeout(() => onNavigate('dashboard'), 3000);
-      return () => clearTimeout(timer);
+    if (!currentUser || currentUser.role !== 'admin') {
+      onNavigate('dashboard');
     }
   }, [currentUser, onNavigate]);
 
+  // If unauthorized, render nothing while effect redirects
   if (!currentUser || currentUser.role !== 'admin') {
-      return (
-          <div className="flex flex-col items-center justify-center h-full min-h-[60vh] p-6 text-center animate-fadeIn">
-              <div className="bg-red-50 p-6 rounded-full mb-6 border-4 border-red-100">
-                  <ShieldAlert size={64} className="text-red-600" />
-              </div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Access Denied</h2>
-              <button onClick={() => onNavigate('dashboard')} className="px-6 py-2 bg-gray-900 text-white rounded-lg mt-4">Back to Dashboard</button>
-          </div>
-      );
+      return null;
   }
 
   const [view, setView] = useState<AdminView>('dashboard');

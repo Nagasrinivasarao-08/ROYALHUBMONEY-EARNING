@@ -6,6 +6,44 @@ import mongoose from 'mongoose';
 
 const router = express.Router();
 
+// --- SECURITY MIDDLEWARE ---
+const verifyAdmin = async (req, res, next) => {
+    try {
+        // Frontend sends user ID in 'x-user-id' header
+        const requestUserId = req.headers['x-user-id'];
+        
+        if (!requestUserId || requestUserId === 'undefined') {
+            return res.status(401).json({ message: "Authentication required" });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(requestUserId)) {
+            return res.status(401).json({ message: "Invalid ID format" });
+        }
+
+        const user = await User.findById(requestUserId);
+        
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (user.role !== 'admin') {
+            console.warn(`[Security] Unauthorized Admin access attempt by ${user.email} (${user._id})`);
+            return res.status(403).json({ message: "Access Denied: Admin privileges required" });
+        }
+
+        // User is admin, proceed
+        next();
+
+    } catch (err) {
+        console.error("Admin Auth Error:", err);
+        return res.status(500).json({ message: "Internal Auth Error" });
+    }
+};
+
+// APPLY MIDDLEWARE TO ALL ROUTES
+router.use(verifyAdmin);
+
+
 // Get All Users (Admin)
 router.get('/users', async (req, res) => {
     try {

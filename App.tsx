@@ -29,7 +29,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isAuth, setIsAuth] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isWakingUp, setIsWakingUp] = useState(true); // New state for wake-up phase
+  const [isWakingUp, setIsWakingUp] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [connectionError, setConnectionError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -75,7 +75,11 @@ function App() {
           if (currentUser && !isValidUser) {
               setIsAuth(false);
               localStorage.removeItem('royal_user_id');
+          } else if (data.currentUser && data.currentUser.role === 'admin') {
+              // FORCE ADMIN TAB ON LOAD
+              setActiveTab('admin');
           }
+
           return true;
       } catch (error: any) {
           throw error;
@@ -127,7 +131,7 @@ function App() {
             await waitForServer();
             setIsWakingUp(false);
             
-            // Step 2: Fetch Data (Once server is up, this should be fast)
+            // Step 2: Fetch Data
             await loadData(restoredUser);
             setConnectionError(false);
         } catch (error: any) {
@@ -154,6 +158,13 @@ function App() {
       return () => clearInterval(interval);
   }, [isAuth, state.currentUser?.role, state.currentUser?.id]);
 
+  // Ensure Admin is always on 'admin' tab if role updates
+  useEffect(() => {
+      if (state.currentUser?.role === 'admin' && activeTab !== 'admin') {
+          setActiveTab('admin');
+      }
+  }, [state.currentUser?.role]);
+
   // ... (Keep existing handlers for login, register, etc.) ...
   const handleLogin = async (email: string, password: string) => {
       try {
@@ -165,9 +176,14 @@ function App() {
           setState(prev => ({ ...prev, currentUser: user }));
           setIsAuth(true);
           showToast(`Welcome back, ${user.username}!`, 'success');
+          
+          if (user.role === 'admin') {
+              setActiveTab('admin');
+          } else {
+              setActiveTab('dashboard');
+          }
+          
           fetchData();
-          if (user.role === 'admin') setActiveTab('admin');
-          else setActiveTab('dashboard');
       } catch (err: any) {
           throw new Error(err.message || 'Login failed');
       }
@@ -460,21 +476,21 @@ function App() {
                 onLogout={handleLogout}
                 isAdmin={state.currentUser?.role === 'admin'}
             >
-            {activeTab === 'dashboard' && state.currentUser && (
+            {activeTab === 'dashboard' && state.currentUser && state.currentUser.role !== 'admin' && (
                 <Dashboard 
                     user={state.currentUser} 
                     products={state.products} 
                     onClaim={handleClaim}
                 />
             )}
-            {activeTab === 'invest' && state.currentUser && (
+            {activeTab === 'invest' && state.currentUser && state.currentUser.role !== 'admin' && (
                 <Invest 
                     products={state.products} 
                     user={state.currentUser} 
                     onInvest={handleInvest} 
                 />
             )}
-            {activeTab === 'wallet' && state.currentUser && (
+            {activeTab === 'wallet' && state.currentUser && state.currentUser.role !== 'admin' && (
                 <Wallet 
                     user={state.currentUser} 
                     settings={state.settings}
@@ -482,7 +498,7 @@ function App() {
                     onWithdraw={handleWithdraw}
                 />
             )}
-            {activeTab === 'referral' && state.currentUser && (
+            {activeTab === 'referral' && state.currentUser && state.currentUser.role !== 'admin' && (
                 <Referral 
                     user={state.currentUser} 
                     allUsers={state.users} 
@@ -490,11 +506,12 @@ function App() {
                     settings={state.settings} 
                 />
             )}
-             {activeTab === 'about' && (
+             {activeTab === 'about' && state.currentUser.role !== 'admin' && (
                 <About />
             )}
             
-            {activeTab === 'admin' && state.currentUser && (
+            {/* ADMIN ONLY VIEW */}
+            {activeTab === 'admin' && state.currentUser && state.currentUser.role === 'admin' && (
                 <AdminPanel 
                     currentUser={state.currentUser}
                     users={state.users}
@@ -514,7 +531,7 @@ function App() {
                 />
             )}
             
-            {state.currentUser && <AIChat balance={state.currentUser.balance} />}
+            {state.currentUser && state.currentUser.role !== 'admin' && <AIChat balance={state.currentUser.balance} />}
             </Layout>
         )}
     </>
