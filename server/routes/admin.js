@@ -6,13 +6,31 @@ import mongoose from 'mongoose';
 
 const router = express.Router();
 
+// --- PUBLIC ROUTES (No Auth Required) ---
+
+// Get Settings (Must be accessible for app initialization)
+router.get('/settings', async (req, res) => {
+    try {
+        let settings = await Settings.findOne();
+        if (!settings) {
+            settings = new Settings();
+            await settings.save();
+        }
+        res.status(200).json(settings);
+    } catch (err) {
+        res.status(500).json(err);
+    }
+});
+
 // --- SECURITY MIDDLEWARE ---
 const verifyAdmin = async (req, res, next) => {
     try {
+        if (req.method === 'OPTIONS') return next();
+
         // Frontend sends user ID in 'x-user-id' header
         const requestUserId = req.headers['x-user-id'];
         
-        if (!requestUserId || requestUserId === 'undefined') {
+        if (!requestUserId || requestUserId === 'undefined' || requestUserId === 'null') {
             return res.status(401).json({ message: "Authentication required" });
         }
 
@@ -40,11 +58,13 @@ const verifyAdmin = async (req, res, next) => {
     }
 };
 
-// APPLY MIDDLEWARE TO ALL ROUTES
+// APPLY MIDDLEWARE TO ALL ROUTES BELOW
 router.use(verifyAdmin);
 
 
-// Get All Users (Admin)
+// --- PROTECTED ROUTES (Admin Only) ---
+
+// Get All Users
 router.get('/users', async (req, res) => {
     try {
         const users = await User.find().sort({ registeredAt: -1 });
@@ -60,7 +80,7 @@ router.get('/users', async (req, res) => {
     }
 });
 
-// Update User (Admin)
+// Update User
 router.put('/users/:id', async (req, res) => {
     try {
         const { balance, password } = req.body;
@@ -75,7 +95,7 @@ router.put('/users/:id', async (req, res) => {
     }
 });
 
-// Delete User (Admin)
+// Delete User
 router.delete('/users/:id', async (req, res) => {
     try {
         const user = await User.findById(req.params.id);
@@ -126,21 +146,7 @@ router.post('/transaction/:userId/:txId', async (req, res) => {
     }
 });
 
-// Get Settings
-router.get('/settings', async (req, res) => {
-    try {
-        let settings = await Settings.findOne();
-        if (!settings) {
-            settings = new Settings();
-            await settings.save();
-        }
-        res.status(200).json(settings);
-    } catch (err) {
-        res.status(500).json(err);
-    }
-});
-
-// Update Settings
+// Update Settings (Protected)
 router.put('/settings', async (req, res) => {
     try {
         let settings = await Settings.findOne();
