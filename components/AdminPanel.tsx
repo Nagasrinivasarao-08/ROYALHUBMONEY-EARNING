@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Product, User, AppSettings } from '../types.ts';
 import { 
   Plus, Trash2, Users, ShoppingBag, ArrowDownLeft, Settings, 
@@ -7,7 +7,7 @@ import {
   ShieldAlert, Image, Lock, AlertTriangle, 
   Edit, RefreshCw, Copy, CheckCircle2, Search,
   Activity, Database, CreditCard, ChevronRight,
-  TrendingUp, ArrowUpRight, LogOut, Wallet
+  TrendingUp, ArrowUpRight, LogOut, Wallet, Upload, Eye
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -49,9 +49,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({ balance: '', password: '' });
   const [showAddProduct, setShowAddProduct] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [newProduct, setNewProduct] = useState<Partial<Product>>({
     name: '', price: 500, dailyIncome: 50, days: 30, description: 'Royal Asset', purchaseLimit: 1, image: 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=2832&auto=format&fit=crop'
   });
+
+  const handleQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        onUpdateSettings({ ...settings, qrCodeUrl: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Data Aggregation
   const stats = useMemo(() => {
@@ -127,7 +140,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <div className={`w-1.5 h-1.5 rounded-full ${tx.status === 'success' ? 'bg-green-500' : tx.status === 'pending' ? 'bg-amber-500' : 'bg-rose-500'}`}></div>
                   <span className="font-bold uppercase text-white/80">{tx.type}</span>
                </div>
-               <span className="font-mono text-amber-500">₹{tx.amount.toFixed(0)}</span>
+               <span className="font-mono text-amber-500 font-bold">₹{tx.amount.toFixed(0)}</span>
             </div>
           ))}
         </div>
@@ -158,7 +171,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                   <div className="text-right">
                     <p className="text-xl font-black text-amber-500">₹{tx.amount}</p>
-                    <p className="text-[9px] text-green-500 font-black uppercase tracking-widest mt-1">Pending Approval</p>
+                    <p className="text-[9px] text-green-500 font-black uppercase tracking-widest mt-1">Check Proof</p>
                   </div>
                </div>
                <div className="flex gap-2">
@@ -205,7 +218,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         <p className="text-[9px] text-amber-200/30 uppercase font-black mb-1.5 flex items-center gap-1.5">
                             <Database size={10} /> Recipient Data
                         </p>
-                        <p className="text-[11px] text-white font-mono leading-relaxed break-all">
+                        <p className="text-[11px] text-amber-100 font-mono leading-relaxed break-all">
                             {tx.withdrawalDetails || 'Unspecified account data'}
                         </p>
                     </div>
@@ -253,26 +266,50 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               type="text" 
               defaultValue={settings.upiId}
               onBlur={(e) => onUpdateSettings({ ...settings, upiId: e.target.value })}
-              className="w-full bg-transparent border-b border-white/10 p-2 text-sm focus:border-amber-500 outline-none transition-all text-white font-mono"
+              className="w-full bg-transparent border-b border-white/20 p-2 text-sm focus:border-amber-500 outline-none transition-all text-amber-400 font-bold font-mono"
               placeholder="e.g. royalhub@paytm"
             />
             <p className="text-[9px] text-amber-200/20 mt-2 italic">This UPI ID will be used for all recharge requests.</p>
           </div>
 
           <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
-            <label className="text-[10px] font-black uppercase tracking-widest text-amber-200/30 block mb-2 ml-1">Static QR Image URL</label>
-            <input 
-              type="text" 
-              defaultValue={settings.qrCodeUrl}
-              onBlur={(e) => onUpdateSettings({ ...settings, qrCodeUrl: e.target.value })}
-              className="w-full bg-transparent border-b border-white/10 p-2 text-sm focus:border-amber-500 outline-none transition-all text-white font-mono"
-              placeholder="https://imgur.com/your-qr.png"
-            />
-            <div className="mt-3 flex items-center gap-3">
-               <div className="w-12 h-12 bg-white/5 rounded-lg border border-white/10 overflow-hidden">
-                  {settings.qrCodeUrl ? <img src={settings.qrCodeUrl} className="w-full h-full object-cover" /> : <Image size={16} className="m-auto mt-4 text-white/10" />}
-               </div>
-               <span className="text-[10px] text-amber-200/40 uppercase font-bold tracking-widest">Active Gateway Image Preview</span>
+            <label className="text-[10px] font-black uppercase tracking-widest text-amber-200/30 block mb-2 ml-1">Recharge QR Code</label>
+            <div className="flex flex-col gap-4">
+              <input 
+                type="text" 
+                value={settings.qrCodeUrl}
+                onChange={(e) => onUpdateSettings({ ...settings, qrCodeUrl: e.target.value })}
+                className="w-full bg-transparent border-b border-white/20 p-2 text-[11px] focus:border-amber-500 outline-none transition-all text-amber-100 font-mono"
+                placeholder="https://imgur.com/your-qr.png"
+              />
+              <div className="flex items-center gap-3">
+                 <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex-1 bg-amber-500/10 text-amber-500 border border-amber-500/30 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-amber-500 hover:text-[#1a0f0a] transition-all"
+                 >
+                    <Upload size={14} /> Upload Static QR
+                 </button>
+                 <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    accept="image/*" 
+                    onChange={handleQrUpload} 
+                 />
+              </div>
+              <div className="mt-2 p-4 bg-black/40 rounded-2xl border border-white/5 flex flex-col items-center">
+                 {settings.qrCodeUrl ? (
+                    <>
+                        <img src={settings.qrCodeUrl} className="w-32 h-32 object-contain rounded-lg shadow-2xl border border-white/10" />
+                        <span className="text-[9px] text-amber-200/40 uppercase font-black tracking-widest mt-3">Live Gateway Preview</span>
+                    </>
+                 ) : (
+                    <div className="w-32 h-32 bg-white/5 rounded-lg border border-dashed border-white/10 flex flex-col items-center justify-center">
+                        <Image size={24} className="text-white/10 mb-2" />
+                        <span className="text-[8px] text-white/20 uppercase font-bold">No Image</span>
+                    </div>
+                 )}
+              </div>
             </div>
           </div>
 
@@ -283,7 +320,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 type="number" 
                 defaultValue={settings.referralBonusPercentage}
                 onBlur={(e) => onUpdateSettings({ ...settings, referralBonusPercentage: parseInt(e.target.value) })}
-                className="w-full bg-transparent border-b border-white/10 p-2 text-sm focus:border-amber-500 outline-none transition-all text-white font-mono"
+                className="w-full bg-transparent border-b border-white/20 p-2 text-sm focus:border-amber-500 outline-none transition-all text-amber-400 font-bold font-mono"
               />
             </div>
             <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
@@ -292,7 +329,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 type="number" 
                 defaultValue={settings.withdrawalFeePercentage}
                 onBlur={(e) => onUpdateSettings({ ...settings, withdrawalFeePercentage: parseInt(e.target.value) })}
-                className="w-full bg-transparent border-b border-white/10 p-2 text-sm focus:border-amber-500 outline-none transition-all text-white font-mono"
+                className="w-full bg-transparent border-b border-white/20 p-2 text-sm focus:border-amber-500 outline-none transition-all text-amber-400 font-bold font-mono"
               />
             </div>
           </div>
@@ -311,6 +348,91 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           Factory Reset Node
         </button>
       </div>
+    </div>
+  );
+
+  const ProductsView = () => (
+    <div className="space-y-4 animate-bounce-in">
+      <div className="flex items-center justify-between px-2">
+        <h3 className="text-xs font-black uppercase tracking-widest text-amber-500">Asset Management Center</h3>
+        <button 
+            onClick={() => setShowAddProduct(true)}
+            className="bg-amber-500 text-black p-2.5 rounded-2xl active:scale-90 transition-all shadow-xl shadow-amber-500/30"
+        >
+            <Plus size={20} />
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        {products.map(product => (
+          <div key={product.id} className="bg-[#2c1810] border border-amber-900/30 p-4 rounded-3xl flex items-center justify-between group">
+             <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl overflow-hidden border border-white/10 shadow-lg">
+                   <img src={product.image} className="w-full h-full object-cover" alt="" />
+                </div>
+                <div>
+                   <h4 className="font-black text-sm text-white uppercase">{product.name}</h4>
+                   <div className="flex gap-3 mt-1">
+                     <p className="text-[10px] text-amber-500 font-black tracking-widest">₹{product.price}</p>
+                     <p className="text-[10px] text-amber-200/30 font-bold uppercase tracking-widest">ROI: ₹{product.dailyIncome}/Day</p>
+                   </div>
+                </div>
+             </div>
+             <button 
+                onClick={() => { if(confirm('Destroy this asset blueprint?')) onDeleteProduct(product.id) }}
+                className="p-3 bg-rose-500/10 text-rose-500 rounded-2xl opacity-40 group-hover:opacity-100 transition-all active:scale-90"
+             >
+                <Trash2 size={18} />
+             </button>
+          </div>
+        ))}
+      </div>
+
+      {showAddProduct && (
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[100] p-6 overflow-y-auto">
+          <div className="max-w-sm mx-auto space-y-6 animate-bounce-in pt-12 pb-24">
+            <div className="flex items-center justify-between">
+               <h3 className="text-xl font-black uppercase tracking-tighter text-amber-500">Forge New Royal Asset</h3>
+               <button onClick={() => setShowAddProduct(false)} className="text-white/20 hover:text-white"><X size={28} /></button>
+            </div>
+            
+            <div className="space-y-5 bg-[#2c1810] p-6 rounded-[32px] border border-amber-900/30 shadow-2xl">
+               <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
+                  <label className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-200/30 mb-2 block">Asset Label</label>
+                  <input type="text" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="w-full bg-transparent border-b border-white/20 py-2 text-sm text-amber-400 font-bold outline-none focus:border-amber-500" placeholder="e.g. TITAN MINER X" />
+               </div>
+               
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
+                    <label className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-200/30 mb-2 block">Entry Cost (₹)</label>
+                    <input type="number" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: parseInt(e.target.value)})} className="w-full bg-transparent border-b border-white/20 py-2 text-sm text-amber-400 font-bold outline-none focus:border-amber-500 font-mono" />
+                  </div>
+                  <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
+                    <label className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-200/30 mb-2 block">Daily Yield (₹)</label>
+                    <input type="number" value={newProduct.dailyIncome} onChange={e => setNewProduct({...newProduct, dailyIncome: parseInt(e.target.value)})} className="w-full bg-transparent border-b border-white/20 py-2 text-sm text-amber-400 font-bold outline-none focus:border-amber-500 font-mono" />
+                  </div>
+               </div>
+
+               <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
+                    <label className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-200/30 mb-2 block">Active Duration (Days)</label>
+                    <input type="number" value={newProduct.days} onChange={e => setNewProduct({...newProduct, days: parseInt(e.target.value)})} className="w-full bg-transparent border-b border-white/20 py-2 text-sm text-amber-400 font-bold outline-none focus:border-amber-500 font-mono" />
+               </div>
+
+               <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
+                    <label className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-200/30 mb-2 block">Blueprint Image URL</label>
+                    <input type="text" value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} className="w-full bg-transparent border-b border-white/20 py-2 text-[10px] text-amber-200/60 font-bold outline-none focus:border-amber-500" />
+               </div>
+
+               <button 
+                onClick={() => { onAddProduct(newProduct as Product); setShowAddProduct(false); }}
+                className="w-full bg-amber-500 text-[#1a0f0a] py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs shadow-2xl shadow-amber-500/40 active:scale-95 transition-all mt-4"
+               >
+                 Authorize Asset Forge
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -350,92 +472,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         {view === 'recharges' && <RechargesView />}
         {view === 'withdrawals' && <WithdrawalsView />}
         {view === 'settings' && <SettingsView />}
+        {view === 'products' && <ProductsView />}
         
-        {view === 'products' && (
-            <div className="space-y-4 animate-bounce-in">
-              <div className="flex items-center justify-between px-2">
-                <h3 className="text-xs font-black uppercase tracking-widest text-amber-500">Asset Management Center</h3>
-                <button 
-                    onClick={() => setShowAddProduct(true)}
-                    className="bg-amber-500 text-black p-2.5 rounded-2xl active:scale-90 transition-all shadow-xl shadow-amber-500/30"
-                >
-                    <Plus size={20} />
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                {products.map(product => (
-                  <div key={product.id} className="bg-[#2c1810] border border-amber-900/30 p-4 rounded-3xl flex items-center justify-between group">
-                     <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-2xl overflow-hidden border border-white/10 shadow-lg">
-                           <img src={product.image} className="w-full h-full object-cover" alt="" />
-                        </div>
-                        <div>
-                           <h4 className="font-black text-sm text-white uppercase">{product.name}</h4>
-                           <div className="flex gap-3 mt-1">
-                             <p className="text-[10px] text-amber-500 font-black tracking-widest">₹{product.price}</p>
-                             <p className="text-[10px] text-amber-200/30 font-bold uppercase tracking-widest">ROI: ₹{product.dailyIncome}/Day</p>
-                           </div>
-                        </div>
-                     </div>
-                     <button 
-                        onClick={() => { if(confirm('Destroy this asset blueprint?')) onDeleteProduct(product.id) }}
-                        className="p-3 bg-rose-500/10 text-rose-500 rounded-2xl opacity-40 group-hover:opacity-100 transition-all active:scale-90"
-                     >
-                        <Trash2 size={18} />
-                     </button>
-                  </div>
-                ))}
-              </div>
-
-              {showAddProduct && (
-                <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[100] p-6 overflow-y-auto">
-                  <div className="max-w-sm mx-auto space-y-6 animate-bounce-in pt-12 pb-24">
-                    <div className="flex items-center justify-between">
-                       <h3 className="text-xl font-black uppercase tracking-tighter text-amber-500">Forge New Royal Asset</h3>
-                       <button onClick={() => setShowAddProduct(false)} className="text-white/20 hover:text-white"><X size={28} /></button>
-                    </div>
-                    
-                    <div className="space-y-5 bg-[#2c1810] p-6 rounded-[32px] border border-amber-900/30 shadow-2xl">
-                       <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
-                          <label className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-200/30 mb-2 block">Asset Label</label>
-                          <input type="text" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="w-full bg-transparent border-b border-white/10 py-2 text-sm text-white outline-none focus:border-amber-500" placeholder="e.g. TITAN MINER X" />
-                       </div>
-                       
-                       <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
-                            <label className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-200/30 mb-2 block">Entry Cost (₹)</label>
-                            <input type="number" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: parseInt(e.target.value)})} className="w-full bg-transparent border-b border-white/10 py-2 text-sm text-white outline-none focus:border-amber-500 font-mono" />
-                          </div>
-                          <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
-                            <label className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-200/30 mb-2 block">Daily Yield (₹)</label>
-                            <input type="number" value={newProduct.dailyIncome} onChange={e => setNewProduct({...newProduct, dailyIncome: parseInt(e.target.value)})} className="w-full bg-transparent border-b border-white/10 py-2 text-sm text-white outline-none focus:border-amber-500 font-mono" />
-                          </div>
-                       </div>
-
-                       <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
-                            <label className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-200/30 mb-2 block">Active Duration (Days)</label>
-                            <input type="number" value={newProduct.days} onChange={e => setNewProduct({...newProduct, days: parseInt(e.target.value)})} className="w-full bg-transparent border-b border-white/10 py-2 text-sm text-white outline-none focus:border-amber-500 font-mono" />
-                       </div>
-
-                       <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
-                            <label className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-200/30 mb-2 block">Blueprint Image URL</label>
-                            <input type="text" value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} className="w-full bg-transparent border-b border-white/10 py-2 text-[10px] text-amber-200/60 outline-none focus:border-amber-500" />
-                       </div>
-
-                       <button 
-                        onClick={() => { onAddProduct(newProduct as Product); setShowAddProduct(false); }}
-                        className="w-full bg-amber-500 text-[#1a0f0a] py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs shadow-2xl shadow-amber-500/40 active:scale-95 transition-all mt-4"
-                       >
-                         Authorize Asset Forge
-                       </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-        )}
-
         {view === 'users' && (
           <div className="space-y-4 animate-bounce-in">
             <div className="relative">
@@ -445,7 +483,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 placeholder="Search Active Partners..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-[#2c1810] border border-amber-900/30 rounded-full py-5 pl-16 pr-6 text-sm focus:border-amber-500 outline-none transition-all text-white placeholder-amber-500/10 shadow-xl"
+                className="w-full bg-[#2c1810] border border-amber-900/30 rounded-full py-5 pl-16 pr-6 text-sm focus:border-amber-500 outline-none transition-all text-amber-400 font-bold placeholder-amber-500/10 shadow-xl"
               />
             </div>
             <div className="space-y-3">
@@ -517,7 +555,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     placeholder="Set new secret passkey..."
                     value={editForm.password}
                     onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
-                    className="w-full bg-transparent border-b border-white/10 py-2 text-sm text-white placeholder-white/5 focus:border-amber-500 outline-none transition-all"
+                    className="w-full bg-transparent border-b border-white/10 py-2 text-sm text-amber-100 font-bold placeholder-white/5 focus:border-amber-500 outline-none transition-all"
                   />
                 </div>
               </div>

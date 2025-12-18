@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { User, AppSettings } from '../types';
-import { QrCode, ArrowDownLeft, ArrowUpRight, History, Filter, ArrowUpDown, Gift, Copy, Check, TrendingUp, ShoppingBag, XCircle, CreditCard, Building, ArrowLeft } from 'lucide-react';
+import { QrCode, ArrowDownLeft, ArrowUpRight, History, Filter, ArrowUpDown, Gift, Copy, Check, TrendingUp, ShoppingBag, XCircle, CreditCard, Building, ArrowLeft, Info, RefreshCw } from 'lucide-react';
 
 interface WalletProps {
   user: User;
@@ -21,7 +22,7 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawMethod, setWithdrawMethod] = useState<'upi' | 'bank'>('upi');
-  const [withdrawInfo, setWithdrawInfo] = useState(''); // Stores UPI ID or Bank Details string
+  const [withdrawInfo, setWithdrawInfo] = useState(''); 
   
   // Filter and Sort State
   const [filterType, setFilterType] = useState<string>('all');
@@ -62,15 +63,11 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
   const handleWithdrawSubmit = () => {
       const val = Number(withdrawAmount);
       if (!withdrawAmount || isNaN(val) || val <= 0) return;
-      if (val < 200) {
-          alert("Minimum withdrawal amount is ₹200");
-          return;
-      }
+      if (val < 200) return;
       if (val > user.balance) return;
       const cleanInfo = withdrawInfo.trim();
       if (!cleanInfo) return;
 
-      // Fix: Send both 'details' AND 'info' to ensure the backend captures it regardless of schema version
       onWithdraw(val, { 
           method: withdrawMethod, 
           details: cleanInfo,
@@ -102,23 +99,11 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
         return 0;
     });
 
-  const getFilterLabel = (type: string) => {
-      switch(type) {
-          case 'recharge': return 'Recharges';
-          case 'income': return 'Income';
-          case 'investment': return 'Investments';
-          case 'withdrawal': return 'Withdrawals';
-          case 'referral': return 'Referral Bonuses';
-          default: return 'All Transactions';
-      }
-  }
-
   const formattedAmount = amount && !isNaN(Number(amount)) ? Number(amount).toFixed(2) : '0.00';
   
   // Logic to determine QR Display
   const getQrUrl = () => {
       if (settings.upiId && Number(amount) > 0) {
-          // Construct UPI URI properly with encoding
           const upiParams = new URLSearchParams();
           upiParams.append('pa', settings.upiId);
           upiParams.append('pn', 'Royal Hub'); 
@@ -136,56 +121,61 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
 
   return (
     <div className="space-y-6">
-      <div className="bg-[#2c1810] rounded-xl p-6 text-white shadow-lg border-b-4 border-amber-600">
-        <p className="text-amber-500/80 text-sm mb-1 uppercase tracking-widest">My Balance</p>
-        <h2 className="text-4xl font-bold mb-8 font-mono">₹{user.balance.toFixed(2)}</h2>
-        
-        <div className="flex gap-4">
-            <button 
-                onClick={() => setShowRecharge(true)}
-                className="flex-1 bg-amber-600 hover:bg-amber-500 text-white py-3 rounded-lg font-bold flex items-center justify-center transition-colors uppercase tracking-wide shadow-lg"
-            >
-                <QrCode className="mr-2" size={20} /> Recharge
-            </button>
-            <button 
-                onClick={() => setShowWithdraw(true)}
-                className="flex-1 bg-[#4a2c20] hover:bg-[#5d3829] text-amber-100 py-3 rounded-lg font-bold flex items-center justify-center transition-colors uppercase tracking-wide border border-[#5d3829]"
-            >
-                <ArrowUpRight className="mr-2" size={20} /> Withdraw
-            </button>
+      <div className="bg-[#2c1810] rounded-2xl p-6 text-white shadow-xl border-b-4 border-amber-600 relative overflow-hidden group">
+        <div className="absolute top-[-20%] right-[-10%] opacity-5 group-hover:rotate-12 transition-all duration-1000">
+            <TrendingUp size={180} />
+        </div>
+        <div className="relative z-10">
+            <p className="text-amber-500/80 text-[10px] font-black mb-1 uppercase tracking-[0.2em]">Liquid Capital</p>
+            <h2 className="text-4xl font-black mb-8 font-mono text-amber-400">₹{user.balance.toFixed(2)}</h2>
+            
+            <div className="flex gap-3">
+                <button 
+                    onClick={() => setShowRecharge(true)}
+                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-[#1a0f0a] py-4 rounded-2xl font-black flex items-center justify-center transition-all uppercase tracking-widest text-[10px] shadow-lg shadow-amber-500/20 active:scale-95"
+                >
+                    <QrCode className="mr-2" size={16} /> Recharge
+                </button>
+                <button 
+                    onClick={() => setShowWithdraw(true)}
+                    className="flex-1 bg-white/5 hover:bg-white/10 text-amber-100 py-4 rounded-2xl font-black flex items-center justify-center transition-all uppercase tracking-widest text-[10px] border border-white/10 active:scale-95"
+                >
+                    <ArrowUpRight className="mr-2" size={16} /> Withdraw
+                </button>
+            </div>
         </div>
       </div>
 
       {/* Recharge Modal */}
       {showRecharge && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl w-full max-w-sm overflow-hidden animate-bounce-in shadow-2xl">
-                <div className="bg-[#2c1810] text-white p-4 flex justify-between items-center">
+        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 backdrop-blur-xl">
+            <div className="bg-[#2c1810] border border-amber-900/30 rounded-[3rem] w-full max-w-sm overflow-hidden animate-bounce-in shadow-2xl">
+                <div className="p-6 border-b border-white/5 flex justify-between items-center">
                     <div className="flex items-center">
                         {rechargeStep === 'qr' && (
                             <button 
                                 onClick={() => setRechargeStep('amount')}
-                                className="mr-3 text-gray-300 hover:text-white transition-colors"
+                                className="mr-3 text-amber-500 hover:text-white transition-colors"
                             >
                                 <ArrowLeft size={20} />
                             </button>
                         )}
-                        <h3 className="text-lg font-bold">Wallet Recharge</h3>
+                        <h3 className="text-sm font-black uppercase tracking-widest text-white">Wallet Inflow</h3>
                     </div>
-                    <button onClick={closeRecharge} className="text-gray-400 hover:text-white">✕</button>
+                    <button onClick={closeRecharge} className="text-white/20 hover:text-white transition-colors"><XCircle size={24}/></button>
                 </div>
                 
-                <div className="p-6">
+                <div className="p-8">
                     {rechargeStep === 'amount' ? (
-                        <div className="space-y-5">
-                            <p className="text-sm text-gray-600 text-center">Enter amount to recharge</p>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">Amount (₹)</label>
+                        <div className="space-y-6">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-200/40 text-center">Define Investment Volume</p>
+                            <div className="bg-black/40 p-6 rounded-[2rem] border border-white/5">
+                                <label className="block text-[9px] font-black text-amber-500 mb-2 uppercase tracking-widest ml-1">Capital Amount (₹)</label>
                                 <input
                                     type="number"
                                     value={amount}
                                     onChange={(e) => setAmount(e.target.value)}
-                                    className="w-full border-2 border-gray-200 rounded-lg p-3 text-2xl font-bold text-center focus:border-amber-500 outline-none"
+                                    className="w-full bg-transparent border-b border-white/10 py-3 text-4xl font-black text-center text-amber-400 focus:border-amber-500 outline-none transition-all font-mono"
                                     placeholder="500"
                                     autoFocus
                                 />
@@ -195,7 +185,7 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
                                     <button 
                                         key={val}
                                         onClick={() => setAmount(val.toString())}
-                                        className="py-2 bg-gray-50 border border-gray-200 rounded text-sm font-medium hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700"
+                                        className="py-3 bg-white/5 border border-white/5 rounded-xl text-[10px] font-black text-amber-200 hover:bg-amber-500 hover:text-black transition-all"
                                     >
                                         ₹{val}
                                     </button>
@@ -204,61 +194,54 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
                             <button
                                 onClick={handleAmountSubmit}
                                 disabled={!amount || Number(amount) <= 0}
-                                className="w-full bg-amber-600 hover:bg-amber-500 text-white py-3 rounded-lg font-bold shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                                className="w-full bg-amber-500 text-[#1a0f0a] py-5 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-amber-500/20 active:scale-95 disabled:opacity-50 transition-all mt-4"
                             >
-                                Next
+                                Generate Gateway
                             </button>
                         </div>
                     ) : (
-                        <div className="text-center space-y-4">
-                            <div className="bg-white p-4 rounded-xl shadow-inner border border-gray-200 inline-block relative group">
+                        <div className="text-center space-y-6">
+                            <div className="bg-white p-5 rounded-[2.5rem] shadow-inner border border-white/10 inline-block relative group animate-bounce-in">
                                 <img 
                                     src={qrImage}
                                     alt="Payment QR"
                                     className="w-48 h-48 object-contain"
                                 />
-                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur-sm rounded-xl">
-                                    <span className="text-xs font-bold text-gray-800">Scan to Pay</span>
-                                </div>
                             </div>
                             <div>
-                                <p className="text-amber-600 font-bold text-3xl">₹{formattedAmount}</p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                    {settings.upiId ? 'Dynamic UPI QR generated' : 'Scan the Static QR Code'}
+                                <p className="text-amber-500 font-black text-4xl font-mono">₹{formattedAmount}</p>
+                                <p className="text-[10px] text-amber-200/30 mt-2 uppercase tracking-widest">
+                                    {settings.upiId ? 'Encrypted UPI Gateway Ready' : 'Global Static QR Gateway'}
                                 </p>
                                 
                                 {settings.upiId && (
-                                    <div className="flex items-center justify-center mt-2 space-x-2 bg-gray-100 py-1.5 px-3 rounded-full mx-auto w-fit max-w-[90%]">
-                                        <span className="text-[10px] text-gray-500 font-mono truncate max-w-[150px]">{settings.upiId}</span>
-                                        <button onClick={copyUpi} className="text-amber-600 hover:text-amber-800 transition-colors">
-                                            {copied ? <Check size={12} /> : <Copy size={12} />}
+                                    <div className="flex items-center justify-center mt-4 space-x-3 bg-white/5 py-3 px-6 rounded-full mx-auto w-fit max-w-full border border-white/10">
+                                        <span className="text-[10px] text-amber-200/60 font-mono truncate max-w-[150px]">{settings.upiId}</span>
+                                        <button onClick={copyUpi} className="text-amber-500 hover:text-white transition-colors">
+                                            {copied ? <Check size={16} /> : <Copy size={16} />}
                                         </button>
                                     </div>
                                 )}
                             </div>
                             
-                             <div className="bg-yellow-50 text-yellow-800 p-2 rounded text-[10px] border border-yellow-200">
-                                <p><strong>Status: Pending</strong></p>
-                                <p>After payment, click button below. Admin will approve shortly.</p>
+                             <div className="bg-amber-500/5 text-amber-500/60 p-4 rounded-2xl text-[9px] border border-amber-500/20 font-bold uppercase leading-relaxed tracking-wider">
+                                <p><strong>Status: Verification Pending</strong></p>
+                                <p className="mt-1">Notify node after transfer. Admin confirmation required for vault credit.</p>
                             </div>
                             
                             <div className="pt-2">
                                 <button
                                     onClick={handlePaymentComplete}
                                     disabled={isProcessing}
-                                    className="w-full bg-green-600 hover:bg-green-500 text-white py-3 rounded-lg font-bold shadow-md transition-all disabled:opacity-50 flex items-center justify-center"
+                                    className="w-full bg-amber-500 text-black py-5 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-amber-500/20 active:scale-95 transition-all flex items-center justify-center"
                                 >
-                                    {isProcessing ? (
-                                        <>
-                                            <span className="animate-spin mr-2">⟳</span> Submitting...
-                                        </>
-                                    ) : 'I Have Paid'}
+                                    {isProcessing ? <RefreshCw size={18} className="animate-spin" /> : 'Signal Transfer Complete'}
                                 </button>
                                 <button 
                                     onClick={() => setRechargeStep('amount')}
-                                    className="mt-3 text-sm text-gray-500 hover:text-gray-800 underline"
+                                    className="mt-4 text-[9px] font-black text-white/20 hover:text-white uppercase tracking-[0.2em] transition-all"
                                 >
-                                    Change Amount
+                                    Re-calibrate Capital
                                 </button>
                             </div>
                         </div>
@@ -270,77 +253,78 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
 
       {/* Withdraw Modal */}
       {showWithdraw && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl w-full max-w-sm overflow-hidden animate-bounce-in shadow-2xl">
-                <div className="bg-[#2c1810] text-white p-4 flex justify-between items-center">
-                    <h3 className="text-lg font-bold">Withdraw Balance</h3>
-                    <button onClick={closeWithdraw} className="text-gray-400 hover:text-white">✕</button>
+        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 backdrop-blur-xl">
+            <div className="bg-[#2c1810] border border-amber-900/30 rounded-[3rem] w-full max-w-sm overflow-hidden animate-bounce-in shadow-2xl">
+                <div className="p-6 border-b border-white/5 flex justify-between items-center">
+                    <h3 className="text-sm font-black uppercase tracking-widest text-white">Capital Outflow</h3>
+                    <button onClick={closeWithdraw} className="text-white/20 hover:text-white transition-colors"><XCircle size={24}/></button>
                 </div>
                 
-                <div className="p-6 space-y-4">
-                    <div>
-                         <div className="flex justify-between items-end mb-1">
-                            <label className="block text-xs font-bold text-gray-700 uppercase">Amount (₹)</label>
-                            <span className="text-xs text-amber-600 font-semibold">Min: ₹200 | Max: ₹{user.balance.toFixed(2)}</span>
+                <div className="p-8 space-y-6">
+                    <div className="bg-black/40 p-6 rounded-[2rem] border border-white/5">
+                         <div className="flex justify-between items-end mb-2 px-1">
+                            <label className="block text-[9px] font-black text-amber-500 uppercase tracking-widest">Withdraw Volume (₹)</label>
+                            <span className="text-[8px] text-amber-200/30 font-bold uppercase">Limit: ₹200+</span>
                         </div>
                         <input
                             type="number"
                             value={withdrawAmount}
                             onChange={(e) => setWithdrawAmount(e.target.value)}
-                            className="w-full border-2 border-gray-200 rounded-lg p-3 text-2xl font-bold text-center focus:border-amber-500 outline-none"
+                            className="w-full bg-transparent border-b border-white/10 py-3 text-4xl font-black text-center text-amber-400 focus:border-amber-500 outline-none transition-all font-mono"
                             placeholder="0"
                             autoFocus
                         />
                     </div>
 
-                    {/* Method Selection */}
                     <div>
-                        <label className="block text-xs font-bold text-gray-700 uppercase mb-2">Withdraw To</label>
-                        <div className="grid grid-cols-2 gap-3 mb-3">
+                        <label className="block text-[9px] font-black text-amber-200/30 uppercase tracking-[0.2em] mb-3 ml-1">Destination Gateway</label>
+                        <div className="grid grid-cols-2 gap-3 mb-4">
                             <button 
                                 onClick={() => setWithdrawMethod('upi')}
-                                className={`flex items-center justify-center p-2 rounded-lg border text-sm font-medium transition-colors ${
-                                    withdrawMethod === 'upi' ? 'bg-amber-50 border-amber-500 text-amber-700' : 'bg-white border-gray-200 text-gray-500'
+                                className={`flex items-center justify-center py-4 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${
+                                    withdrawMethod === 'upi' ? 'bg-amber-500 border-amber-500 text-black shadow-lg shadow-amber-500/20' : 'bg-white/5 border-white/5 text-amber-200/30'
                                 }`}
                             >
-                                <QrCode size={16} className="mr-2"/> UPI ID
+                                <QrCode size={14} className="mr-2"/> UPI ID
                             </button>
                             <button 
                                 onClick={() => setWithdrawMethod('bank')}
-                                className={`flex items-center justify-center p-2 rounded-lg border text-sm font-medium transition-colors ${
-                                    withdrawMethod === 'bank' ? 'bg-amber-50 border-amber-500 text-amber-700' : 'bg-white border-gray-200 text-gray-500'
+                                className={`flex items-center justify-center py-4 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${
+                                    withdrawMethod === 'bank' ? 'bg-amber-500 border-amber-500 text-black shadow-lg shadow-amber-500/20' : 'bg-white/5 border-white/5 text-amber-200/30'
                                 }`}
                             >
-                                <Building size={16} className="mr-2"/> Bank Transfer
+                                <Building size={14} className="mr-2"/> Bank Node
                             </button>
                         </div>
                         
-                        {withdrawMethod === 'upi' ? (
-                            <input 
-                                type="text"
-                                value={withdrawInfo}
-                                onChange={(e) => setWithdrawInfo(e.target.value)}
-                                placeholder="Enter UPI ID (e.g. user@ybl)"
-                                className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:border-amber-500 outline-none"
-                            />
-                        ) : (
-                            <textarea 
-                                value={withdrawInfo}
-                                onChange={(e) => setWithdrawInfo(e.target.value)}
-                                placeholder="Account No, IFSC, Holder Name"
-                                className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:border-amber-500 outline-none h-20 resize-none"
-                            />
-                        )}
+                        <div className="bg-black/40 p-5 rounded-[2rem] border border-white/5">
+                          {withdrawMethod === 'upi' ? (
+                              <input 
+                                  type="text"
+                                  value={withdrawInfo}
+                                  onChange={(e) => setWithdrawInfo(e.target.value)}
+                                  placeholder="Enter UPI ID (e.g. user@ybl)"
+                                  className="w-full bg-transparent border-b border-white/10 py-2 text-sm text-amber-100 font-bold placeholder-white/10 focus:border-amber-500 outline-none transition-all"
+                              />
+                          ) : (
+                              <textarea 
+                                  value={withdrawInfo}
+                                  onChange={(e) => setWithdrawInfo(e.target.value)}
+                                  placeholder="Acc No, IFSC, Holder Name"
+                                  className="w-full bg-transparent border-b border-white/10 py-2 text-sm text-amber-100 font-bold placeholder-white/10 focus:border-amber-500 outline-none h-20 resize-none no-scrollbar"
+                              />
+                          )}
+                        </div>
                     </div>
                     
                     {Number(withdrawAmount) > 0 && (
-                        <div className="bg-gray-50 p-3 rounded-lg text-sm space-y-2 border border-gray-100">
-                             <div className="flex justify-between text-red-500">
-                                <span>Service Fee ({feePercentage}%):</span>
+                        <div className="bg-black/40 p-4 rounded-2xl text-[9px] space-y-2 border border-white/5 font-bold uppercase tracking-wider">
+                             <div className="flex justify-between text-rose-500">
+                                <span>Network Fee ({feePercentage}%):</span>
                                 <span>-₹{withdrawFee.toFixed(2)}</span>
                             </div>
-                            <div className="flex justify-between font-bold text-gray-800 pt-2 border-t border-gray-200">
-                                <span>You Receive:</span>
+                            <div className="flex justify-between text-amber-400 pt-2 border-t border-white/5">
+                                <span>Net Settlement:</span>
                                 <span>₹{withdrawReceive.toFixed(2)}</span>
                             </div>
                         </div>
@@ -349,16 +333,16 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
                     <button
                         onClick={handleWithdrawSubmit}
                         disabled={!withdrawAmount || Number(withdrawAmount) <= 0 || Number(withdrawAmount) < 200 || Number(withdrawAmount) > user.balance || !withdrawInfo.trim()}
-                        className="w-full bg-[#2c1810] hover:bg-gray-800 text-white py-3 rounded-lg font-bold shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full bg-amber-500 text-[#1a0f0a] py-5 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-amber-500/20 active:scale-95 disabled:opacity-50 transition-all"
                     >
                          {Number(withdrawAmount) > user.balance 
-                            ? 'Insufficient Balance' 
+                            ? 'Exceeds Reserves' 
                             : Number(withdrawAmount) > 0 && Number(withdrawAmount) < 200 
-                                ? 'Min Withdrawal ₹200'
-                                : 'Confirm Withdrawal'}
+                                ? 'Minimum ₹200'
+                                : 'Authorize Disbursement'}
                     </button>
-                     <p className="text-[10px] text-center text-gray-400">
-                        Processed within 24 hours. Admin approval required.
+                     <p className="text-[8px] text-center text-amber-200/20 font-black uppercase tracking-widest">
+                        Node latency: 0-24 hours. Verification required.
                     </p>
                 </div>
             </div>
@@ -366,85 +350,65 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
       )}
 
       <div>
-          <h3 className="text-[#2c1810] font-bold mb-4 flex items-center border-l-4 border-amber-600 pl-2">
-              <History size={18} className="mr-2" /> Recent Transactions
+          <h3 className="text-amber-500/40 font-black text-[10px] mb-4 flex items-center uppercase tracking-[0.3em] px-2">
+              <History size={12} className="mr-2" /> Financial Audit Trail
           </h3>
 
           {/* Filters & Sorting */}
-          <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 mb-4">
-              <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="bg-[#2c1810] border border-amber-900/30 p-3 rounded-2xl shadow-xl mb-4">
+              <div className="grid grid-cols-2 gap-2 mb-3">
                   <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Filter size={14} className="text-amber-600" />
-                      </div>
                       <select 
                           value={filterType}
                           onChange={(e) => setFilterType(e.target.value)}
-                          className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500 appearance-none"
+                          className="w-full bg-black/40 border border-white/5 rounded-xl py-3 pl-4 pr-10 text-[9px] font-black uppercase tracking-widest text-amber-200/60 focus:outline-none focus:border-amber-500 appearance-none transition-all"
                       >
-                          <option value="all">All Types</option>
-                          <option value="recharge">Recharge</option>
-                          <option value="income">Income</option>
-                          <option value="investment">Investment</option>
-                          <option value="withdrawal">Withdrawal</option>
-                          <option value="referral">Referral Bonus</option>
+                          <option value="all">All Logs</option>
+                          <option value="recharge">Inflow</option>
+                          <option value="income">Yields</option>
+                          <option value="investment">Allocation</option>
+                          <option value="withdrawal">Outflow</option>
+                          <option value="referral">Bonus</option>
                       </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                        <ArrowUpDown size={12} />
+                      <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-amber-500/30">
+                        <Filter size={14} />
                       </div>
                   </div>
 
                   <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <ArrowUpDown size={14} className="text-amber-600" />
-                      </div>
                       <select 
                           value={sortBy}
                           onChange={(e) => setSortBy(e.target.value)}
-                          className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500 appearance-none"
+                          className="w-full bg-black/40 border border-white/5 rounded-xl py-3 pl-4 pr-10 text-[9px] font-black uppercase tracking-widest text-amber-200/60 focus:outline-none focus:border-amber-500 appearance-none transition-all"
                       >
                           <option value="date-desc">Newest First</option>
-                          <option value="date-asc">Oldest First</option>
-                          <option value="amount-desc">Amount: High-Low</option>
-                          <option value="amount-asc">Amount: Low-High</option>
+                          <option value="date-asc">Chronological</option>
+                          <option value="amount-desc">High Volume</option>
+                          <option value="amount-asc">Low Volume</option>
                       </select>
-                       <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                         <ArrowUpDown size={12} />
+                       <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-amber-500/30">
+                         <ArrowUpDown size={14} />
                       </div>
                   </div>
-              </div>
-
-              {/* Result Summary */}
-              <div className="flex justify-between items-center text-xs px-1 border-t border-gray-100 pt-2">
-                <span className="text-gray-500 font-medium">
-                    Showing <span className="text-gray-800 font-bold">{filteredTransactions.length}</span> {getFilterLabel(filterType)}
-                </span>
-                {filterType !== 'all' && (
-                    <button 
-                        onClick={() => setFilterType('all')} 
-                        className="text-amber-600 hover:text-amber-800 font-medium flex items-center"
-                    >
-                        <XCircle size={12} className="mr-1" /> Clear Filter
-                    </button>
-                )}
               </div>
           </div>
 
           <div className="space-y-3">
               {filteredTransactions.length === 0 ? (
-                  <p className="text-gray-400 text-center py-8 bg-white rounded-lg border border-dashed border-amber-100 text-sm">
-                      {filterType === 'all' ? 'No transactions yet.' : `No ${filterType} transactions found.`}
-                  </p>
+                  <div className="text-center py-16 bg-[#2c1810]/40 rounded-[3rem] border border-dashed border-amber-900/20">
+                      <Info size={40} className="mx-auto text-amber-500/10 mb-4" />
+                      <p className="text-[10px] font-black uppercase tracking-widest text-amber-200/20">No matching logs detected</p>
+                  </div>
               ) : (
                   filteredTransactions.map((tx) => (
-                      <div key={tx.id} className="bg-white p-4 rounded-lg border border-gray-100 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
+                      <div key={tx.id} className="bg-[#2c1810] border border-amber-900/30 p-5 rounded-[2rem] flex items-center justify-between shadow-lg group hover:border-amber-500/50 transition-all">
                           <div className="flex items-center">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center mr-3 ${
-                                    tx.type === 'recharge' ? 'bg-green-100 text-green-700' :
-                                    tx.type === 'income' ? 'bg-amber-100 text-amber-700' :
-                                    tx.type === 'referral' ? 'bg-purple-100 text-purple-700' :
-                                    tx.type === 'investment' ? 'bg-blue-100 text-blue-700' :
-                                    'bg-red-100 text-red-700'
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-4 border ${
+                                    tx.type === 'recharge' ? 'bg-green-500/5 border-green-500/20 text-green-500' :
+                                    tx.type === 'income' ? 'bg-amber-500/5 border-amber-500/20 text-amber-500' :
+                                    tx.type === 'referral' ? 'bg-purple-500/5 border-purple-500/20 text-purple-500' :
+                                    tx.type === 'investment' ? 'bg-blue-500/5 border-blue-500/20 text-blue-500' :
+                                    'bg-rose-500/5 border-rose-500/20 text-rose-500'
                                 }`}>
                                     {tx.type === 'recharge' && <ArrowDownLeft size={18} />}
                                     {tx.type === 'income' && <TrendingUp size={18} />}
@@ -453,24 +417,24 @@ export const Wallet: React.FC<WalletProps> = ({ user, settings, onRecharge, onWi
                                     {tx.type === 'withdrawal' && <ArrowUpRight size={18} />}
                                 </div>
                                 <div>
-                                    <p className="font-semibold text-gray-800 capitalize text-sm">
-                                        {tx.type === 'referral' ? 'Referral Bonus' : tx.type}
+                                    <p className="font-black text-white uppercase text-[11px] tracking-tight">
+                                        {tx.type === 'referral' ? 'Referral Payout' : tx.type}
                                     </p>
-                                    <p className="text-xs text-gray-400">{new Date(tx.date).toLocaleDateString()}</p>
+                                    <p className="text-[9px] text-amber-200/20 font-mono tracking-tighter mt-1">{new Date(tx.date).toLocaleDateString()} {new Date(tx.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
                                 </div>
                           </div>
                           <div className="text-right">
-                              <div className={`font-bold font-mono ${
+                              <div className={`font-black font-mono text-sm ${
                                   tx.type === 'recharge' || tx.type === 'income' || tx.type === 'referral'
-                                  ? 'text-amber-600' 
-                                  : 'text-gray-900'
+                                  ? 'text-amber-500' 
+                                  : 'text-white'
                               }`}>
-                                  {tx.type === 'recharge' || tx.type === 'income' || tx.type === 'referral' ? '+' : '-'}₹{tx.amount.toFixed(2)}
+                                  {tx.type === 'recharge' || tx.type === 'income' || tx.type === 'referral' ? '+' : '-'}₹{tx.amount.toFixed(0)}
                               </div>
-                              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
-                                  tx.status === 'success' ? 'bg-green-100 text-green-700' : 
-                                  tx.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                                  'bg-yellow-100 text-yellow-700'
+                              <span className={`text-[8px] uppercase font-black tracking-widest px-2 py-0.5 rounded-full mt-1.5 inline-block ${
+                                  tx.status === 'success' ? 'bg-green-500/10 text-green-500' : 
+                                  tx.status === 'rejected' ? 'bg-rose-500/10 text-rose-500' :
+                                  'bg-amber-500/10 text-amber-500'
                               }`}>
                                   {tx.status}
                               </span>
