@@ -1,17 +1,16 @@
-
 import React, { useEffect, useState } from 'react';
-import { Layout } from './components/Layout';
-import { Dashboard } from './components/Dashboard';
-import { Invest } from './components/Invest';
-import { Wallet } from './components/Wallet';
-import { AdminPanel } from './components/AdminPanel';
-import { AIChat } from './components/AIChat';
-import { Auth } from './components/Auth';
-import { Referral } from './components/Referral';
-import { About } from './components/About';
-import { AppState, Product, User, AppSettings } from './types';
-import { api } from './services/api';
-import { CheckCircle, AlertTriangle, XCircle, Info, Loader2, RefreshCw, Activity, ShieldCheck, Cpu } from 'lucide-react';
+import { Layout } from './components/Layout.tsx';
+import { Dashboard } from './components/Dashboard.tsx';
+import { Invest } from './components/Invest.tsx';
+import { Wallet } from './components/Wallet.tsx';
+import { AdminPanel } from './components/AdminPanel.tsx';
+import { AIChat } from './components/AIChat.tsx';
+import { Auth } from './components/Auth.tsx';
+import { Referral } from './components/Referral.tsx';
+import { About } from './components/About.tsx';
+import { AppState, Product, User } from './types.ts';
+import { api } from './services/api.ts';
+import { CheckCircle, AlertTriangle, XCircle, Info, RefreshCw, Activity, Cpu } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -38,7 +37,6 @@ function App() {
   const [isWakingUp, setIsWakingUp] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [connectionError, setConnectionError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
   const [wakeUpAttempt, setWakeUpAttempt] = useState(0);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -53,9 +51,8 @@ function App() {
     const initPi = async () => {
         if (window.Pi) {
             try {
-                // Ensure version matches the Pi Developer Portal requirements
                 await window.Pi.init({ version: "2.0", sandbox: true });
-                console.log("✅ Pi SDK Ready (Sandbox Mode Active)");
+                console.log("✅ Pi SDK Ready");
             } catch (err) {
                 console.warn("⚠️ Pi SDK Init Warning:", err);
             }
@@ -130,7 +127,6 @@ function App() {
             await loadData(restoredUser);
         } catch (error: any) {
             setConnectionError(true);
-            setErrorMessage(error.message || "Network Error: Verify backend deployment.");
         } finally {
             setIsLoading(false);
         }
@@ -181,7 +177,6 @@ function App() {
     showToast('Session Closed.', 'info');
   };
 
-  // Fix: Added missing event handler for claiming income
   const handleClaim = async () => {
     if (!state.currentUser) return;
     try {
@@ -193,7 +188,6 @@ function App() {
     }
   };
 
-  // Fix: Added missing event handler for product investment
   const handleInvest = async (product: Product) => {
     if (!state.currentUser) return;
     try {
@@ -205,7 +199,6 @@ function App() {
     }
   };
 
-  // Fix: Added missing event handler for wallet recharge
   const handleRecharge = async (amount: number) => {
     if (!state.currentUser) return;
     try {
@@ -217,7 +210,6 @@ function App() {
     }
   };
 
-  // Fix: Added missing event handler for balance withdrawal
   const handleWithdraw = async (amount: number, details: any) => {
     if (!state.currentUser) return;
     try {
@@ -241,22 +233,9 @@ function App() {
                       <Cpu size={56} className="mx-auto text-amber-500 relative z-10 animate-pulse" />
                   </div>
                   <h2 className="text-2xl font-black tracking-tighter uppercase mb-2">Royal Hub</h2>
-                  
-                  {isWakingUp ? (
-                      <div className="space-y-4">
-                          <p className="text-amber-200/40 text-[10px] font-bold uppercase tracking-[0.3em]">
-                             Initializing Secure Node
-                          </p>
-                          <div className="flex items-center justify-center gap-3 text-amber-500/80 font-mono text-xs bg-black/40 py-2 rounded-xl border border-white/5">
-                               <Activity size={14} className="animate-pulse" />
-                               <span>GATEWAY STATUS: ATTEMPT {wakeUpAttempt}</span>
-                          </div>
-                      </div>
-                  ) : (
-                       <p className="text-amber-200/40 text-[10px] font-bold uppercase tracking-[0.3em] animate-pulse">
-                          Syncing Blockchain Data
-                       </p>
-                  )}
+                  <p className="text-amber-200/40 text-[10px] font-bold uppercase tracking-[0.3em] animate-pulse">
+                      {isWakingUp ? `Initializing Secure Node (Attempt ${wakeUpAttempt})` : 'Syncing Blockchain Data'}
+                  </p>
               </div>
           </div>
       );
@@ -273,11 +252,7 @@ function App() {
                   <p className="text-gray-500 mb-8 text-xs font-medium leading-relaxed uppercase tracking-wide">
                       Unable to establish a secure link with the central database.
                   </p>
-                  
-                  <button 
-                    onClick={() => window.location.reload()}
-                    className="w-full bg-[#1a0f0a] text-white px-6 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl flex items-center justify-center group"
-                  >
+                  <button onClick={() => window.location.reload()} className="w-full bg-[#1a0f0a] text-white px-6 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl flex items-center justify-center group">
                       <RefreshCw size={18} className="mr-3 group-hover:rotate-180 transition-transform duration-700" /> Retry Link
                   </button>
               </div>
