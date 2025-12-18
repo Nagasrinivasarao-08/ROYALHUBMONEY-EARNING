@@ -1,4 +1,4 @@
-import { AppState, Product, User, AppSettings } from '../types';
+import { AppState, Product, User, AppSettings } from '../types.ts';
 
 // --- CONFIGURATION ---
 export const DEFAULT_PRODUCTION_URL = 'https://royal-hub-backend.onrender.com/api';
@@ -7,8 +7,14 @@ export const LOCAL_API_URL = 'http://localhost:5000/api';
 const getBaseUrl = () => {
     if (typeof window === 'undefined') return LOCAL_API_URL;
     
-    // Check for explicit environment variable first
-    const envUrl = (import.meta as any).env?.VITE_API_URL;
+    // Check for explicit environment variable safely
+    let envUrl = null;
+    try {
+        envUrl = (import.meta as any).env?.VITE_API_URL;
+    } catch (e) {
+        // Fallback for non-Vite environments
+    }
+    
     if (envUrl) return envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
 
     // Auto-detect local vs production
@@ -23,7 +29,6 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
     const safeEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     let url = `${API_URL}${safeEndpoint}`;
     
-    // Bust cache for GET requests
     if (!options.method || options.method === 'GET') {
         const separator = url.includes('?') ? '&' : '?';
         url = `${url}${separator}_t=${Date.now()}`;
@@ -53,10 +58,7 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
 
         return responseBody;
     } catch (error: any) {
-        console.error(`Fetch error at ${endpoint}:`, error);
-        if (error.name === 'TypeError') {
-            throw new Error("Unable to reach Royal Hub Servers. Please check your internet or wait for server wakeup.");
-        }
+        console.error(`[API Error] ${endpoint}:`, error.message);
         throw error;
     }
 };

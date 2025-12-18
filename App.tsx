@@ -8,7 +8,7 @@ import { AIChat } from './components/AIChat.tsx';
 import { Auth } from './components/Auth.tsx';
 import { Referral } from './components/Referral.tsx';
 import { About } from './components/About.tsx';
-import { AppState, Product, User } from './types.ts';
+import { AppState, Product, User, AppSettings } from './types.ts';
 import { api } from './services/api.ts';
 import { CheckCircle, AlertTriangle, XCircle, Info, RefreshCw, Activity, Cpu } from 'lucide-react';
 
