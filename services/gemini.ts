@@ -1,11 +1,22 @@
 import { GoogleGenAI } from "@google/genai";
-import { Product } from "../types";
+import { Product } from "../types.ts";
 
-// Initialize AI with the environment variable as per requirements
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Helper to get AI instance safely
+const getAI = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    console.warn("Gemini API Key is missing in process.env.API_KEY");
+    // Return a dummy object to prevent immediate crash if key is missing during first pass
+    return null;
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 export const analyzeProduct = async (product: Product): Promise<string> => {
   try {
+    const ai = getAI();
+    if (!ai) return "AI Configuration pending. Please refresh.";
+
     const prompt = `
       Analyze this investment product for a simulation game.
       Product Name: ${product.name}
@@ -30,6 +41,9 @@ export const analyzeProduct = async (product: Product): Promise<string> => {
 
 export const getFinancialAdvice = async (query: string, balance: number): Promise<string> => {
     try {
+      const ai = getAI();
+      if (!ai) return "AI Service connecting...";
+
       const prompt = `
         You are a financial advisor in an investment simulation game called Royal Hub.
         The user has a current balance of ₹${balance}.

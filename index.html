@@ -14,12 +14,12 @@
     <!-- Tailwind CSS Runtime -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // Process shim for browser environments using Node-style libraries
-      window.process = {
-        env: {
-          API_KEY: "" // Will be injected by the environment or handled in code
-        }
-      };
+      /** 
+       * CRITICAL FIX: Robust process shim.
+       * We preserve existing process/env objects if they were injected by the platform.
+       */
+      window.process = window.process || { env: {} };
+      window.process.env = window.process.env || {};
 
       tailwind.config = {
         theme: {
@@ -47,15 +47,16 @@
         }
       }
 
-      // Global error catcher for debugging blank screens
       window.onerror = function(message, source, lineno, colno, error) {
+        console.error("Global Error:", message, error);
         const root = document.getElementById('root');
         if (root && root.innerHTML === "") {
-          root.innerHTML = `<div style="padding: 20px; color: white; background: #800; font-family: sans-serif;">
-            <h1 style="font-size: 18px;">Runtime Error Detected</h1>
-            <p style="font-size: 12px;">${message}</p>
-            <pre style="font-size: 10px; opacity: 0.7;">${error ? error.stack : 'No stack trace available'}</pre>
-            <button onclick="location.reload()" style="background: white; color: black; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Reload App</button>
+          root.innerHTML = `<div style="padding: 40px; color: white; background: #1a0f0a; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+            <div style="background: #ef4444; padding: 20px; border-radius: 20px; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(239, 68, 68, 0.2);">
+              <h1 style="font-size: 20px; margin: 0; font-weight: 800; text-transform: uppercase;">Initialization Error</h1>
+            </div>
+            <p style="font-size: 14px; opacity: 0.8; max-width: 300px; margin-bottom: 24px;">${message}</p>
+            <button onclick="location.reload()" style="background: #d97706; color: white; border: none; padding: 12px 30px; border-radius: 12px; font-weight: 800; cursor: pointer; text-transform: uppercase; letter-spacing: 1px;">Reload System</button>
           </div>`;
         }
       };
