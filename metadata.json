@@ -1,5 +1,7 @@
 {
-  "name": "Royal Hub - Premium Investment",
-  "description": "A comprehensive investment simulation dashboard featuring Royal Hub product management, daily income tracking, QR recharge simulation, and an AI financial assistant.",
-  "requestFramePermissions": []
+  "name": "Royal Hub - Premium Asset Mining",
+  "description": "The next generation of digital asset management and premium wealth generation. Secure, verified, and transparent daily returns.",
+  "requestFramePermissions": [
+    "camera"
+  ]
 }
