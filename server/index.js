@@ -12,34 +12,19 @@ dotenv.config();
 
 const app = express();
 
-// --- MANUAL CORS MIDDLEWARE ---
-// This overrides any library defaults and forces permissive CORS
+// --- CORS MIDDLEWARE ---
 app.use((req, res, next) => {
-    // Allow any origin
     res.header('Access-Control-Allow-Origin', '*');
-    
-    // Allow standard methods
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    
-    // Allow headers that the frontend might send
-    // ADDED: 'x-user-id' is required for the new security check
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-user-id');
     
-    // Handle Preflight strictly
     if (req.method === 'OPTIONS') {
         return res.sendStatus(200);
     }
-    
     next();
 });
 
-// Request Logging
-app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-    next();
-});
-
-// Body Parsers
+// Logging & Body Parsing
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -63,12 +48,10 @@ const seedAdmin = async () => {
             });
             await admin.save();
             console.log('✅ Default Admin Account Seeded');
-        } else {
-             if (exists.role !== 'admin') {
-                exists.role = 'admin';
-                await exists.save();
-                console.log('✅ Updated permissions for Admin');
-            }
+        } else if (exists.role !== 'admin') {
+            exists.role = 'admin';
+            await exists.save();
+            console.log('✅ Updated permissions for Admin');
         }
     } catch (err) {
         console.error('❌ Admin seeding failed:', err);
@@ -91,18 +74,16 @@ app.use("/api/users", userRoute);
 app.use("/api/transactions", txRoute);
 app.use("/api/admin", adminRoute);
 
-// Dedicated Health Check for Wake-up
+// Health Checks
 app.get('/api/health', (req, res) => {
     res.status(200).json({ status: "OK", timestamp: Date.now() });
 });
 
-// Root Health Check
 app.get('/api', (req, res) => {
     res.status(200).json({ 
         status: "Healthy", 
         message: "Royal Hub API is online", 
-        version: "1.0.3",
-        cors: "Enabled with x-user-id"
+        version: "1.0.4"
     });
 });
 
@@ -110,18 +91,20 @@ app.get('/', (req, res) => {
     res.status(200).json({ status: "Healthy", service: "Royal Hub Backend" });
 });
 
-// Global Error Handler
+// Global Error Handler - Fixed syntax to prevent identifiers errors
 app.use((err, req, res, next) => {
-    if (res.headersSent) return next(err);
-    console.error("Server Error:", err);
-    res.status(500).json({ 
-        message: "Internal Server Error", 
-        error: err.message 
+    console.error("Critical Server Error:", err);
+    if (res.headersSent) {
+        return next(err);
+    }
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({
+        message: "Internal Server Error",
+        error: err.message || "An unexpected error occurred"
     });
 });
 
 const PORT = process.env.PORT || 5000;
-
 app.listen(PORT, () => {
-  console.log(`🚀 Backend server is running on port ${PORT}`);
+  console.log(`🚀 Royal Hub Backend active on port ${PORT}`);
 });

@@ -6,9 +6,46 @@ import mongoose from 'mongoose';
 
 const router = express.Router();
 
-// --- PUBLIC ROUTES (No Auth Required) ---
+/**
+ * SECURITY MIDDLEWARE
+ * Verifies that the requester has a valid User ID in headers and that the user is an Admin.
+ */
+const verifyAdmin = async (req, res, next) => {
+    try {
+        const requestUserId = req.headers['x-user-id'];
+        
+        if (!requestUserId || requestUserId === 'undefined' || requestUserId === 'null' || requestUserId === '') {
+            return res.status(401).json({ message: "Security Check: Authentication required" });
+        }
 
-// Get Settings (Must be accessible for app initialization)
+        if (!mongoose.Types.ObjectId.isValid(requestUserId)) {
+            return res.status(401).json({ message: "Security Check: Invalid ID format" });
+        }
+
+        const user = await User.findById(requestUserId);
+        
+        if (!user) {
+            return res.status(401).json({ message: "Security Check: Account no longer exists" });
+        }
+
+        if (user.role !== 'admin') {
+            console.warn(`[Blocked Access] Unauthorized attempt by ${user.email}`);
+            return res.status(403).json({ message: "Access Denied: Admin role required" });
+        }
+
+        // Passed all checks
+        req.adminUser = user;
+        next();
+
+    } catch (err) {
+        console.error("Admin Auth Logic Error:", err);
+        return res.status(500).json({ message: "Internal Security Error" });
+    }
+};
+
+// --- PUBLIC ROUTES (Accessible without login) ---
+
+// Get System Settings (UPI ID, QR, Fees)
 router.get('/settings', async (req, res) => {
     try {
         let settings = await Settings.findOne();
@@ -18,70 +55,31 @@ router.get('/settings', async (req, res) => {
         }
         res.status(200).json(settings);
     } catch (err) {
-        res.status(500).json(err);
+        res.status(500).json({ message: "Failed to load settings" });
     }
 });
 
-// --- SECURITY MIDDLEWARE ---
-const verifyAdmin = async (req, res, next) => {
-    try {
-        if (req.method === 'OPTIONS') return next();
 
-        // Frontend sends user ID in 'x-user-id' header
-        const requestUserId = req.headers['x-user-id'];
-        
-        if (!requestUserId || requestUserId === 'undefined' || requestUserId === 'null') {
-            return res.status(401).json({ message: "Authentication required" });
-        }
+// --- PROTECTED ROUTES (Require Admin Privileges) ---
 
-        if (!mongoose.Types.ObjectId.isValid(requestUserId)) {
-            return res.status(401).json({ message: "Invalid ID format" });
-        }
-
-        const user = await User.findById(requestUserId);
-        
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
-
-        if (user.role !== 'admin') {
-            console.warn(`[Security] Unauthorized Admin access attempt by ${user.email} (${user._id})`);
-            return res.status(403).json({ message: "Access Denied: Admin privileges required" });
-        }
-
-        // User is admin, proceed
-        next();
-
-    } catch (err) {
-        console.error("Admin Auth Error:", err);
-        return res.status(500).json({ message: "Internal Auth Error" });
-    }
-};
-
-// APPLY MIDDLEWARE TO ALL ROUTES BELOW
-router.use(verifyAdmin);
-
-
-// --- PROTECTED ROUTES (Admin Only) ---
-
-// Get All Users
-router.get('/users', async (req, res) => {
+// Get All Users List
+router.get('/users', verifyAdmin, async (req, res) => {
     try {
         const users = await User.find().sort({ registeredAt: -1 });
         const formatted = users.map(u => ({
             ...u._doc,
             id: u._id.toString(),
-            transactions: u.transactions.map(t => ({...t._doc, id: t._id.toString()})),
-            investments: u.investments.map(i => ({...i._doc, id: i._id.toString()}))
+            transactions: (u.transactions || []).map(t => ({...t._doc, id: t._id.toString()})),
+            investments: (u.investments || []).map(i => ({...i._doc, id: i._id.toString()}))
         }));
         res.status(200).json(formatted);
     } catch (err) {
-        res.status(500).json(err);
+        res.status(500).json({ message: "Failed to fetch user list" });
     }
 });
 
-// Update User
-router.put('/users/:id', async (req, res) => {
+// Update User Details (Balance, Password)
+router.put('/users/:id', verifyAdmin, async (req, res) => {
     try {
         const { balance, password } = req.body;
         const updates = {};
@@ -89,41 +87,39 @@ router.put('/users/:id', async (req, res) => {
         if (password !== undefined) updates.password = password; 
 
         await User.findByIdAndUpdate(req.params.id, { $set: updates });
-        res.status(200).json("User updated");
+        res.status(200).json({ message: "User updated successfully" });
     } catch (err) {
-        res.status(500).json(err);
+        res.status(500).json({ message: "Update failed" });
     }
 });
 
 // Delete User
-router.delete('/users/:id', async (req, res) => {
+router.delete('/users/:id', verifyAdmin, async (req, res) => {
     try {
         const user = await User.findById(req.params.id);
-        if (!user) return res.status(404).json("User not found");
-        if (user.role === 'admin') return res.status(403).json("Cannot delete admin");
+        if (!user) return res.status(404).json({ message: "User not found" });
+        if (user.role === 'admin') return res.status(403).json({ message: "Cannot delete administrators" });
 
         await User.findByIdAndDelete(req.params.id);
-        res.status(200).json("User deleted successfully");
+        res.status(200).json({ message: "User deleted" });
     } catch (err) {
-        res.status(500).json(err);
+        res.status(500).json({ message: "Deletion failed" });
     }
 });
 
-// Approve/Reject Transaction
-router.post('/transaction/:userId/:txId', async (req, res) => {
+// Process Transaction (Approve/Reject)
+router.post('/transaction/:userId/:txId', verifyAdmin, async (req, res) => {
     const { action } = req.body;
     const { userId, txId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(userId)) return res.status(400).json("Invalid User ID");
-    
     try {
         const user = await User.findById(userId);
-        if (!user) return res.status(404).json("User not found");
+        if (!user) return res.status(404).json({ message: "User not found" });
 
         const tx = user.transactions.id(txId);
-        if (!tx) return res.status(404).json("Transaction not found");
+        if (!tx) return res.status(404).json({ message: "Transaction not found" });
         
-        if (tx.status !== 'pending') return res.status(400).json("Transaction is not pending");
+        if (tx.status !== 'pending') return res.status(400).json({ message: "Transaction already processed" });
 
         if (action === 'approve') {
             tx.status = 'success';
@@ -133,21 +129,19 @@ router.post('/transaction/:userId/:txId', async (req, res) => {
         } else if (action === 'reject') {
             tx.status = 'rejected';
             if (tx.type === 'withdrawal') {
-                user.balance += tx.amount; // Refund balance
+                user.balance += tx.amount; // Refund
             }
         }
 
         await user.save();
-        res.status(200).json("Transaction updated");
-
+        res.status(200).json({ message: "Status updated" });
     } catch (err) {
-        console.error("Admin Tx Error:", err);
-        res.status(500).json(err);
+        res.status(500).json({ message: "Transaction processing failed" });
     }
 });
 
-// Update Settings (Protected)
-router.put('/settings', async (req, res) => {
+// Update Global Settings
+router.put('/settings', verifyAdmin, async (req, res) => {
     try {
         let settings = await Settings.findOne();
         if (!settings) settings = new Settings();
@@ -156,12 +150,12 @@ router.put('/settings', async (req, res) => {
         await settings.save();
         res.status(200).json(settings);
     } catch (err) {
-        res.status(500).json(err);
+        res.status(500).json({ message: "Settings update failed" });
     }
 });
 
-// Factory Reset
-router.post('/reset', async (req, res) => {
+// Full System Reset
+router.post('/reset', verifyAdmin, async (req, res) => {
     try {
         await User.deleteMany({ role: { $ne: 'admin' } }); 
         await Product.deleteMany({});
@@ -172,9 +166,9 @@ router.post('/reset', async (req, res) => {
             admin.transactions = [];
             await admin.save();
         }
-        res.status(200).json("System Reset");
+        res.status(200).json({ message: "System factory reset complete" });
     } catch (err) {
-        res.status(500).json(err);
+        res.status(500).json({ message: "Reset failed" });
     }
 });
 

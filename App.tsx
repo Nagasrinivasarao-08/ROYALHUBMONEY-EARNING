@@ -10,9 +10,15 @@ import { Referral } from './components/Referral';
 import { About } from './components/About';
 import { AppState, Product, User, AppSettings } from './types';
 import { api } from './services/api';
-import { CheckCircle, AlertTriangle, XCircle, Info, Loader2, Server, RefreshCw, Activity } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, Info, Loader2, RefreshCw, Activity, ShieldCheck } from 'lucide-react';
 
-// --- Toast Notification System ---
+// Declare Pi SDK on window for TypeScript
+declare global {
+  interface Window {
+    Pi: any;
+  }
+}
+
 interface Toast {
     id: number;
     message: string;
@@ -43,9 +49,21 @@ function App() {
       }, 4000); 
   };
 
-  // --- Data Fetching ---
+  // --- Pi Network Initialization ---
+  useEffect(() => {
+    const initPi = async () => {
+        if (window.Pi) {
+            try {
+                await window.Pi.init({ version: "2.0", sandbox: true });
+                console.log("✅ Pi SDK Initialized (Sandbox: true)");
+            } catch (err) {
+                console.error("❌ Pi SDK Init Error:", err);
+            }
+        }
+    };
+    initPi();
+  }, []);
 
-  // Phase 1: Wake Up Server (Fast Polling)
   const waitForServer = async (retries = 90, delay = 1000): Promise<boolean> => {
       try {
           await api.checkHealth();
@@ -60,50 +78,34 @@ function App() {
       }
   };
 
-  // Phase 2: Load Data (Standard)
   const loadData = async (currentUser: User | null) => {
       try {
           const data = await api.getInitialState(currentUser);
-          const isValidUser = !!data.currentUser;
-          
           setState(prev => ({
               ...prev,
               ...data,
               currentUser: data.currentUser
           }));
 
-          if (currentUser && !isValidUser) {
+          if (currentUser && !data.currentUser) {
               setIsAuth(false);
               localStorage.removeItem('royal_user_id');
-          } else if (data.currentUser && data.currentUser.role === 'admin') {
-              // FORCE ADMIN TAB ON LOAD
+          } else if (data.currentUser?.role === 'admin') {
               setActiveTab('admin');
           }
-
           return true;
       } catch (error: any) {
           throw error;
       }
   };
 
-  // Background Refresh
   const fetchData = async () => {
       try {
           const data = await api.getInitialState(state.currentUser);
-          setState(prev => ({
-              ...prev,
-              ...data,
-              currentUser: data.currentUser 
-          }));
-          
-          if (state.currentUser && !data.currentUser) {
-              setIsAuth(false);
-              localStorage.removeItem('royal_user_id');
-          }
+          setState(prev => ({ ...prev, ...data }));
           setConnectionError(false);
       } catch (error) {
-          console.error("Failed to fetch data:", error);
-          if (!connectionError && !state.products.length) setConnectionError(true);
+          console.error("Background refresh failed:", error);
       }
   };
 
@@ -118,24 +120,15 @@ function App() {
         let restoredUser = null;
         
         if (storedUserId && storedUserId !== 'undefined' && storedUserId !== 'null') {
-            try {
-                restoredUser = { id: storedUserId } as User;
-                setIsAuth(true); 
-            } catch (err) {
-                localStorage.removeItem('royal_user_id');
-            }
+            restoredUser = { id: storedUserId } as User;
+            setIsAuth(true); 
         }
 
         try {
-            // Step 1: Wake up server (Fast 1s polling)
             await waitForServer();
             setIsWakingUp(false);
-            
-            // Step 2: Fetch Data
             await loadData(restoredUser);
-            setConnectionError(false);
         } catch (error: any) {
-            console.error("Init failed:", error);
             setConnectionError(true);
             setErrorMessage(error.message || "Failed to connect to backend.");
         } finally {
@@ -148,41 +141,18 @@ function App() {
   useEffect(() => {
       if (!isAuth) return;
       const isAdmin = state.currentUser?.role === 'admin';
-      const intervalTime = isAdmin ? 10000 : 30000; 
-
-      const interval = setInterval(() => {
-          if (state.currentUser && state.currentUser.id) {
-            fetchData();
-          }
-      }, intervalTime); 
+      const interval = setInterval(() => fetchData(), isAdmin ? 15000 : 45000); 
       return () => clearInterval(interval);
   }, [isAuth, state.currentUser?.role, state.currentUser?.id]);
 
-  // Ensure Admin is always on 'admin' tab if role updates
-  useEffect(() => {
-      if (state.currentUser?.role === 'admin' && activeTab !== 'admin') {
-          setActiveTab('admin');
-      }
-  }, [state.currentUser?.role]);
-
-  // ... (Keep existing handlers for login, register, etc.) ...
   const handleLogin = async (email: string, password: string) => {
       try {
           const user = await api.login(email, password);
-          if (!user || !user.id || user.id === 'undefined') {
-              throw new Error("Login failed: Invalid server response (Missing ID)");
-          }
           localStorage.setItem('royal_user_id', user.id);
           setState(prev => ({ ...prev, currentUser: user }));
           setIsAuth(true);
           showToast(`Welcome back, ${user.username}!`, 'success');
-          
-          if (user.role === 'admin') {
-              setActiveTab('admin');
-          } else {
-              setActiveTab('dashboard');
-          }
-          
+          setActiveTab(user.role === 'admin' ? 'admin' : 'dashboard');
           fetchData();
       } catch (err: any) {
           throw new Error(err.message || 'Login failed');
@@ -192,14 +162,11 @@ function App() {
   const handleRegister = async (data: any) => {
       try {
           const user = await api.register(data);
-          if (!user || !user.id || user.id === 'undefined') {
-              throw new Error("Registration failed: Invalid server response (Missing ID)");
-          }
           localStorage.setItem('royal_user_id', user.id);
           setState(prev => ({ ...prev, currentUser: user }));
           setIsAuth(true);
           setActiveTab('dashboard');
-          showToast('Registration successful! Welcome to Royal Hub.', 'success');
+          showToast('Registration successful!', 'success');
           fetchData();
       } catch (err: any) {
           throw new Error(err.message || 'Registration failed');
@@ -211,14 +178,14 @@ function App() {
     setIsAuth(false);
     setState(prev => ({ ...prev, currentUser: null }));
     setActiveTab('dashboard');
-    showToast('Logged out successfully.', 'info');
+    showToast('Logged out.', 'info');
   };
 
   const handleInvest = async (product: Product) => {
     if (!state.currentUser) return;
     try {
         await api.invest(state.currentUser.id, product.id);
-        showToast(`Successfully invested in ${product.name}!`, 'success');
+        showToast(`Invested in ${product.name}!`, 'success');
         await fetchData(); 
     } catch (err: any) {
         showToast(err.message || 'Investment failed', 'error');
@@ -238,13 +205,9 @@ function App() {
 
   const handleRecharge = async (amount: number) => {
     if (!state.currentUser) return;
-    if (!state.currentUser.id) {
-        showToast("User session invalid. Please re-login.", "error");
-        return;
-    }
     try {
         await api.recharge(state.currentUser.id, amount);
-        showToast('Recharge submitted! Pending Admin approval.', 'success');
+        showToast('Recharge pending approval.', 'success');
         await fetchData();
     } catch (err: any) {
         showToast(err.message, 'error');
@@ -262,150 +225,35 @@ function App() {
     }
   };
 
-  const handleAddProduct = async (product: Product) => {
-    try {
-        await api.addProduct(product);
-        showToast('Product added successfully', 'success');
-        await fetchData();
-    } catch (err: any) {
-        showToast(err.message, 'error');
-    }
-  };
-
-  const handleDeleteProduct = async (id: string) => {
-      try {
-        await api.deleteProduct(id);
-        showToast('Product deleted', 'info');
-        await fetchData();
-      } catch (err: any) {
-          showToast(err.message, 'error');
-      }
-  };
-
-  const handleUpdateSettings = async (newSettings: AppSettings) => {
-      try {
-        await api.updateSettings(newSettings);
-        showToast('System settings updated', 'success');
-        await fetchData();
-      } catch (err: any) {
-          showToast(err.message, 'error');
-      }
-  };
-
-  const handleUpdateAdminCredentials = (email: string, password: string) => {
-    if (!state.currentUser) return;
-    handleAdminUpdateUser(state.currentUser.id, { email, password });
-  };
-
-  const handleAdminUpdateUser = async (userId: string, updates: Partial<User>) => {
-      try {
-        await api.updateUser(userId, updates);
-        showToast('User updated successfully.', 'success');
-        await fetchData();
-      } catch (err: any) {
-          showToast(err.message, 'error');
-      }
-  };
-
-  const handleApproveRecharge = async (userId: string, txId: string) => {
-      try {
-        await api.handleTransaction(userId, txId, 'approve');
-        showToast('Recharge approved.', 'success');
-        await fetchData();
-      } catch (err: any) {
-          showToast(err.message, 'error');
-      }
-  };
-
-  const handleRejectRecharge = async (userId: string, txId: string) => {
-      try {
-        await api.handleTransaction(userId, txId, 'reject');
-        showToast('Recharge rejected.', 'info');
-        await fetchData();
-      } catch (err: any) {
-          showToast(err.message, 'error');
-      }
-  };
-
-  const handleApproveWithdrawal = async (userId: string, txId: string) => {
-      try {
-        await api.handleTransaction(userId, txId, 'approve');
-        showToast('Withdrawal approved.', 'success');
-        await fetchData();
-      } catch (err: any) {
-          showToast(err.message, 'error');
-      }
-  };
-
-  const handleRejectWithdrawal = async (userId: string, txId: string) => {
-      try {
-        await api.handleTransaction(userId, txId, 'reject');
-        showToast('Withdrawal rejected and refunded.', 'info');
-        await fetchData();
-      } catch (err: any) {
-          showToast(err.message, 'error');
-      }
-  };
-
-  const handleResetData = async () => {
-      try {
-        await api.resetData();
-        showToast('System Factory Reset Complete.', 'success');
-        setIsAuth(false);
-        localStorage.removeItem('royal_user_id');
-        setState(prev => ({ ...prev, currentUser: null, users: [], products: [] }));
-      } catch (err: any) {
-          showToast(err.message, 'error');
-      }
-  };
-
-  const handleRetryConnection = () => {
-      setIsLoading(true);
-      setConnectionError(false);
-      setWakeUpAttempt(0);
-      setErrorMessage('');
-      
-      const storedUserId = localStorage.getItem('royal_user_id');
-      const mockUser = storedUserId ? { id: storedUserId } as User : null;
-      
-      // Retry whole init process
-      waitForServer()
-        .then(() => loadData(mockUser))
-        .then(() => setConnectionError(false))
-        .catch((e) => {
-            setConnectionError(true);
-            setErrorMessage(e.message);
-        })
-        .finally(() => setIsLoading(false));
-  };
-
-
   if (isLoading) {
       return (
-          <div className="min-h-screen flex items-center justify-center bg-[#2c1810] p-4">
-              <div className="text-center text-white bg-[#4a2c20] p-8 rounded-xl shadow-2xl max-w-sm w-full border border-amber-900/50">
-                  <div className="relative mb-6">
-                      <div className="absolute inset-0 bg-amber-500 blur-xl opacity-20 rounded-full"></div>
-                      <Loader2 size={48} className="animate-spin mx-auto text-amber-500 relative z-10" />
+          <div className="min-h-screen flex items-center justify-center bg-[#2c1810] p-4 font-sans">
+              <div className="text-center text-white bg-[#3d2319] p-10 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] max-w-sm w-full border border-amber-900/30">
+                  <div className="relative mb-8">
+                      <div className="absolute inset-0 bg-amber-500/20 blur-2xl rounded-full"></div>
+                      <Loader2 size={64} className="animate-spin mx-auto text-amber-500 relative z-10" />
                   </div>
-                  <h2 className="text-xl font-bold mb-3 tracking-wide">Connecting to Royal Hub</h2>
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <ShieldCheck size={18} className="text-amber-500" />
+                    <h2 className="text-2xl font-black tracking-tight uppercase">Royal Hub</h2>
+                  </div>
                   
                   {isWakingUp ? (
-                      <div className="space-y-3">
-                          <p className="text-amber-100/70 text-sm">
-                             Waking up backend server...
+                      <div className="space-y-4">
+                          <p className="text-amber-100/60 text-xs font-medium uppercase tracking-[0.2em]">
+                             Waking up Pi Gateway
                           </p>
-                          <div className="w-full bg-black/30 rounded-full h-1.5 overflow-hidden">
-                              <div className="bg-amber-500 h-full rounded-full animate-pulse w-2/3"></div>
+                          <div className="w-full bg-black/40 rounded-full h-1.5 overflow-hidden border border-white/5">
+                              <div className="bg-gradient-to-r from-amber-600 to-amber-400 h-full rounded-full animate-[progress_2s_infinite] w-full origin-left"></div>
                           </div>
-                          <div className="bg-black/20 rounded-lg p-2 animate-fadeIn flex items-center justify-center gap-2">
+                          <div className="bg-black/30 rounded-lg py-2 px-4 flex items-center justify-between border border-white/5">
                                <Activity size={14} className="text-amber-400 animate-pulse" />
-                               <span className="text-xs text-amber-400 font-mono">Attempt {wakeUpAttempt} / 90</span>
+                               <span className="text-[10px] text-amber-400 font-mono font-bold">ATTEMPT {wakeUpAttempt} / 90</span>
                           </div>
                       </div>
                   ) : (
-                       <p className="text-amber-100/70 text-sm">
-                          Loading your dashboard...
+                       <p className="text-amber-100/60 text-xs font-medium uppercase tracking-[0.2em] animate-pulse">
+                          Syncing Secure Data...
                        </p>
                   )}
               </div>
@@ -415,33 +263,21 @@ function App() {
 
   if (connectionError && !isAuth) {
       return (
-          <div className="min-h-screen flex items-center justify-center bg-[#2c1810] p-6">
-              <div className="text-center bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full animate-bounce-in">
-                  <div className="bg-red-50 p-4 rounded-full w-20 h-20 mx-auto mb-4 flex items-center justify-center">
-                    <AlertTriangle size={40} className="text-red-500" />
+          <div className="min-h-screen flex items-center justify-center bg-[#2c1810] p-6 font-sans">
+              <div className="text-center bg-white p-10 rounded-2xl shadow-2xl max-w-sm w-full animate-bounce-in border-b-8 border-red-500">
+                  <div className="bg-red-50 p-5 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center border-2 border-red-100">
+                    <AlertTriangle size={48} className="text-red-500" />
                   </div>
-                  <h2 className="text-xl font-bold text-gray-800 mb-2">Connection Failed</h2>
-                  <p className="text-gray-600 mb-4 text-sm">
-                      Could not connect to the Royal Hub Backend.
+                  <h2 className="text-2xl font-black text-gray-900 mb-2 uppercase tracking-tight">Access Error</h2>
+                  <p className="text-gray-500 mb-6 text-sm leading-relaxed">
+                      Could not establish a secure connection to Royal Hub servers.
                   </p>
                   
-                  {errorMessage && (
-                      <div className="bg-red-50 p-2 rounded mb-4 border border-red-100">
-                          <p className="text-xs text-red-600 font-mono break-all">{errorMessage}</p>
-                      </div>
-                  )}
-
-                  <div className="bg-gray-100 p-3 rounded mb-6 border border-gray-200 text-left">
-                      <p className="text-[10px] text-gray-400 uppercase font-bold mb-1">Target URL</p>
-                      <p className="text-xs text-gray-800 font-mono break-all bg-white p-1 rounded border border-gray-200">
-                          {api.getBaseUrl()}
-                      </p>
-                  </div>
                   <button 
-                    onClick={handleRetryConnection}
-                    className="w-full bg-amber-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-amber-700 transition-colors shadow-lg flex items-center justify-center"
+                    onClick={() => window.location.reload()}
+                    className="w-full bg-[#2c1810] text-white px-6 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl flex items-center justify-center group"
                   >
-                      <RefreshCw size={18} className="mr-2" /> Retry Connection
+                      <RefreshCw size={18} className="mr-2 group-hover:rotate-180 transition-transform duration-500" /> Reconnect
                   </button>
               </div>
           </div>
@@ -452,16 +288,16 @@ function App() {
     <>
         <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col gap-2 w-full max-w-sm px-4">
             {toasts.map(toast => (
-                <div key={toast.id} className={`shadow-xl rounded-lg p-4 flex items-center justify-between text-white animate-slide-up ${
-                    toast.type === 'success' ? 'bg-green-600' :
-                    toast.type === 'error' ? 'bg-red-600' :
-                    'bg-gray-800'
+                <div key={toast.id} className={`shadow-2xl rounded-xl p-4 flex items-center justify-between text-white animate-slide-up border border-white/10 ${
+                    toast.type === 'success' ? 'bg-emerald-600' :
+                    toast.type === 'error' ? 'bg-rose-600' :
+                    'bg-zinc-900'
                 }`}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                         {toast.type === 'success' && <CheckCircle size={20} />}
                         {toast.type === 'error' && <XCircle size={20} />}
                         {toast.type === 'info' && <Info size={20} />}
-                        <span className="font-medium text-sm">{toast.message}</span>
+                        <span className="font-bold text-xs uppercase tracking-wider">{toast.message}</span>
                     </div>
                 </div>
             ))}
@@ -477,57 +313,38 @@ function App() {
                 isAdmin={state.currentUser?.role === 'admin'}
             >
             {activeTab === 'dashboard' && state.currentUser && state.currentUser.role !== 'admin' && (
-                <Dashboard 
-                    user={state.currentUser} 
-                    products={state.products} 
-                    onClaim={handleClaim}
-                />
+                <Dashboard user={state.currentUser} products={state.products} onClaim={handleClaim} />
             )}
             {activeTab === 'invest' && state.currentUser && state.currentUser.role !== 'admin' && (
-                <Invest 
-                    products={state.products} 
-                    user={state.currentUser} 
-                    onInvest={handleInvest} 
-                />
+                <Invest products={state.products} user={state.currentUser} onInvest={handleInvest} />
             )}
             {activeTab === 'wallet' && state.currentUser && state.currentUser.role !== 'admin' && (
-                <Wallet 
-                    user={state.currentUser} 
-                    settings={state.settings}
-                    onRecharge={handleRecharge} 
-                    onWithdraw={handleWithdraw}
-                />
+                <Wallet user={state.currentUser} settings={state.settings} onRecharge={handleRecharge} onWithdraw={handleWithdraw} />
             )}
             {activeTab === 'referral' && state.currentUser && state.currentUser.role !== 'admin' && (
-                <Referral 
-                    user={state.currentUser} 
-                    allUsers={state.users} 
-                    products={state.products}
-                    settings={state.settings} 
-                />
+                <Referral user={state.currentUser} allUsers={state.users} products={state.products} settings={state.settings} />
             )}
              {activeTab === 'about' && state.currentUser.role !== 'admin' && (
                 <About />
             )}
             
-            {/* ADMIN ONLY VIEW */}
-            {activeTab === 'admin' && state.currentUser && state.currentUser.role === 'admin' && (
+            {activeTab === 'admin' && state.currentUser?.role === 'admin' && (
                 <AdminPanel 
                     currentUser={state.currentUser}
                     users={state.users}
                     products={state.products}
                     settings={state.settings}
-                    onAddProduct={handleAddProduct}
-                    onDeleteProduct={handleDeleteProduct}
-                    onUpdateSettings={handleUpdateSettings}
-                    onApproveWithdrawal={handleApproveWithdrawal}
-                    onRejectWithdrawal={handleRejectWithdrawal}
-                    onApproveRecharge={handleApproveRecharge}
-                    onRejectRecharge={handleRejectRecharge}
+                    onAddProduct={(p) => api.addProduct(p).then(fetchData)}
+                    onDeleteProduct={(id) => api.deleteProduct(id).then(fetchData)}
+                    onUpdateSettings={(s) => api.updateSettings(s).then(fetchData)}
+                    onApproveWithdrawal={(u, t) => api.handleTransaction(u, t, 'approve').then(fetchData)}
+                    onRejectWithdrawal={(u, t) => api.handleTransaction(u, t, 'reject').then(fetchData)}
+                    onApproveRecharge={(u, t) => api.handleTransaction(u, t, 'approve').then(fetchData)}
+                    onRejectRecharge={(u, t) => api.handleTransaction(u, t, 'reject').then(fetchData)}
                     onNavigate={setActiveTab}
-                    onUpdateAdminCredentials={handleUpdateAdminCredentials}
-                    onResetData={handleResetData}
-                    onUpdateUser={handleAdminUpdateUser}
+                    onUpdateAdminCredentials={(e, p) => api.updateUser(state.currentUser!.id, { email: e, password: p }).then(fetchData)}
+                    onResetData={() => api.resetData().then(() => window.location.reload())}
+                    onUpdateUser={(uid, upd) => api.updateUser(uid, upd).then(fetchData)}
                 />
             )}
             
