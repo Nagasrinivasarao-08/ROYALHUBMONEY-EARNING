@@ -279,7 +279,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 type="text" 
                 value={settings.qrCodeUrl}
                 onChange={(e) => onUpdateSettings({ ...settings, qrCodeUrl: e.target.value })}
-                className="w-full bg-transparent border-b border-white/20 p-2 text-[11px] focus:border-amber-500 outline-none transition-all text-amber-100 font-mono"
+                className="w-full bg-transparent border-b border-white/20 p-2 text-[11px] focus:border-amber-500 outline-none transition-all text-amber-100 font-mono font-bold"
                 placeholder="https://imgur.com/your-qr.png"
               />
               <div className="flex items-center gap-3">
@@ -287,7 +287,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     onClick={() => fileInputRef.current?.click()}
                     className="flex-1 bg-amber-500/10 text-amber-500 border border-amber-500/30 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-amber-500 hover:text-[#1a0f0a] transition-all"
                  >
-                    <Upload size={14} /> Upload Static QR
+                    <Upload size={14} /> Upload QR Image
                  </button>
                  <input 
                     type="file" 
@@ -373,7 +373,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div>
                    <h4 className="font-black text-sm text-white uppercase">{product.name}</h4>
                    <div className="flex gap-3 mt-1">
-                     <p className="text-[10px] text-amber-500 font-black tracking-widest">₹{product.price}</p>
+                     <p className="text-[10px] text-amber-500 font-black tracking-widest font-bold">₹{product.price}</p>
                      <p className="text-[10px] text-amber-200/30 font-bold uppercase tracking-widest">ROI: ₹{product.dailyIncome}/Day</p>
                    </div>
                 </div>
@@ -415,12 +415,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
                     <label className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-200/30 mb-2 block">Active Duration (Days)</label>
-                    <input type="number" value={newProduct.days} onChange={e => setNewProduct({...newProduct, days: parseInt(e.target.value)})} className="w-full bg-transparent border-b border-white/20 py-2 text-sm text-amber-400 font-bold outline-none focus:border-amber-500 font-mono" />
+                    <input type="number" value={newProduct.days} onChange={e => setNewProduct({...newProduct, days: parseInt(e.target.value)})} className="w-full bg-transparent border-b border-white/10 py-2 text-sm text-amber-400 font-bold outline-none focus:border-amber-500 font-mono" />
                </div>
 
                <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
                     <label className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-200/30 mb-2 block">Blueprint Image URL</label>
-                    <input type="text" value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} className="w-full bg-transparent border-b border-white/20 py-2 text-[10px] text-amber-200/60 font-bold outline-none focus:border-amber-500" />
+                    <input type="text" value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} className="w-full bg-transparent border-b border-white/10 py-2 text-[10px] text-amber-100 font-bold outline-none focus:border-amber-500" />
                </div>
 
                <button 
@@ -477,13 +477,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         {view === 'users' && (
           <div className="space-y-4 animate-bounce-in">
             <div className="relative">
-              <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-amber-500/30" size={20} />
+              <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-amber-500/50" size={20} />
               <input 
                 type="text" 
                 placeholder="Search Active Partners..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-[#2c1810] border border-amber-900/30 rounded-full py-5 pl-16 pr-6 text-sm focus:border-amber-500 outline-none transition-all text-amber-400 font-bold placeholder-amber-500/10 shadow-xl"
+                className="w-full bg-[#2c1810] border border-amber-900/30 rounded-full py-5 pl-16 pr-6 text-sm focus:border-amber-500 outline-none transition-all text-amber-400 font-bold placeholder-amber-500/20 shadow-xl"
               />
             </div>
             <div className="space-y-3">
@@ -502,14 +502,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <p className="text-[10px] text-amber-200/20 font-mono tracking-tighter mb-1">{user.email}</p>
                       <div className="flex gap-2 items-center">
                         <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded-full">ACTIVE</span>
-                        <p className="text-xs font-black text-amber-400">₹{(user.balance || 0).toFixed(0)}</p>
+                        <p className="text-xs font-black text-amber-400 font-bold">₹{(user.balance || 0).toFixed(0)}</p>
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="text-right mr-2 hidden sm:block">
                          <p className="text-[8px] font-black text-amber-500/30 uppercase tracking-[0.2em]">Joined</p>
-                         <p className="text-[10px] text-white/50 font-mono">{new Date(user.registeredAt).toLocaleDateString()}</p>
+                         <p className="text-[10px] text-white/50 font-mono font-bold">{new Date(user.registeredAt).toLocaleDateString()}</p>
                     </div>
                     <ChevronRight size={18} className="text-amber-500/20 group-hover:text-amber-500 transition-all" />
                   </div>
@@ -534,7 +534,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <span className="text-4xl font-black text-amber-500">{editingUser.username.charAt(0).toUpperCase()}</span>
                  </div>
                  <h2 className="text-2xl font-black text-white uppercase tracking-tighter">{editingUser.username}</h2>
-                 <p className="text-[10px] text-amber-200/30 font-mono uppercase tracking-widest mt-1">Status: Operational</p>
+                 <p className="text-[10px] text-amber-200/30 font-mono uppercase tracking-widest mt-1 font-bold">Status: Operational</p>
               </div>
 
               <div className="space-y-4">
@@ -555,7 +555,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     placeholder="Set new secret passkey..."
                     value={editForm.password}
                     onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
-                    className="w-full bg-transparent border-b border-white/10 py-2 text-sm text-amber-100 font-bold placeholder-white/5 focus:border-amber-500 outline-none transition-all"
+                    className="w-full bg-transparent border-b border-white/10 py-2 text-sm text-amber-100 font-bold placeholder-white/10 focus:border-amber-500 outline-none transition-all"
                   />
                 </div>
               </div>
