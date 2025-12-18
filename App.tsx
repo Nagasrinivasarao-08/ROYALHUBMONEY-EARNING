@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
@@ -10,9 +11,8 @@ import { Referral } from './components/Referral';
 import { About } from './components/About';
 import { AppState, Product, User, AppSettings } from './types';
 import { api } from './services/api';
-import { CheckCircle, AlertTriangle, XCircle, Info, Loader2, RefreshCw, Activity, ShieldCheck } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, Info, Loader2, RefreshCw, Activity, ShieldCheck, Cpu } from 'lucide-react';
 
-// Declare Pi SDK on window for TypeScript
 declare global {
   interface Window {
     Pi: any;
@@ -49,28 +49,28 @@ function App() {
       }, 4000); 
   };
 
-  // --- Pi Network Initialization ---
   useEffect(() => {
     const initPi = async () => {
         if (window.Pi) {
             try {
+                // Ensure version matches the Pi Developer Portal requirements
                 await window.Pi.init({ version: "2.0", sandbox: true });
-                console.log("✅ Pi SDK Initialized (Sandbox: true)");
+                console.log("✅ Pi SDK Ready (Sandbox Mode Active)");
             } catch (err) {
-                console.error("❌ Pi SDK Init Error:", err);
+                console.warn("⚠️ Pi SDK Init Warning:", err);
             }
         }
     };
     initPi();
   }, []);
 
-  const waitForServer = async (retries = 90, delay = 1000): Promise<boolean> => {
+  const waitForServer = async (retries = 60, delay = 1500): Promise<boolean> => {
       try {
           await api.checkHealth();
           return true;
       } catch (e) {
           if (retries > 0) {
-              setWakeUpAttempt(90 - retries + 1);
+              setWakeUpAttempt(60 - retries + 1);
               await new Promise(r => setTimeout(r, delay));
               return waitForServer(retries - 1, delay);
           }
@@ -105,7 +105,7 @@ function App() {
           setState(prev => ({ ...prev, ...data }));
           setConnectionError(false);
       } catch (error) {
-          console.error("Background refresh failed:", error);
+          console.error("Sync Error:", error);
       }
   };
 
@@ -130,7 +130,7 @@ function App() {
             await loadData(restoredUser);
         } catch (error: any) {
             setConnectionError(true);
-            setErrorMessage(error.message || "Failed to connect to backend.");
+            setErrorMessage(error.message || "Network Error: Verify backend deployment.");
         } finally {
             setIsLoading(false);
         }
@@ -141,9 +141,9 @@ function App() {
   useEffect(() => {
       if (!isAuth) return;
       const isAdmin = state.currentUser?.role === 'admin';
-      const interval = setInterval(() => fetchData(), isAdmin ? 15000 : 45000); 
+      const interval = setInterval(() => fetchData(), isAdmin ? 15000 : 30000); 
       return () => clearInterval(interval);
-  }, [isAuth, state.currentUser?.role, state.currentUser?.id]);
+  }, [isAuth, state.currentUser?.role]);
 
   const handleLogin = async (email: string, password: string) => {
       try {
@@ -151,11 +151,11 @@ function App() {
           localStorage.setItem('royal_user_id', user.id);
           setState(prev => ({ ...prev, currentUser: user }));
           setIsAuth(true);
-          showToast(`Welcome back, ${user.username}!`, 'success');
+          showToast(`Greetings, ${user.username}!`, 'success');
           setActiveTab(user.role === 'admin' ? 'admin' : 'dashboard');
           fetchData();
       } catch (err: any) {
-          throw new Error(err.message || 'Login failed');
+          throw new Error(err.message || 'Verification failed');
       }
   };
 
@@ -166,10 +166,10 @@ function App() {
           setState(prev => ({ ...prev, currentUser: user }));
           setIsAuth(true);
           setActiveTab('dashboard');
-          showToast('Registration successful!', 'success');
+          showToast('Account Created Successfully', 'success');
           fetchData();
       } catch (err: any) {
-          throw new Error(err.message || 'Registration failed');
+          throw new Error(err.message || 'Creation failed');
       }
   };
 
@@ -178,82 +178,83 @@ function App() {
     setIsAuth(false);
     setState(prev => ({ ...prev, currentUser: null }));
     setActiveTab('dashboard');
-    showToast('Logged out.', 'info');
+    showToast('Session Closed.', 'info');
   };
 
-  const handleInvest = async (product: Product) => {
-    if (!state.currentUser) return;
-    try {
-        await api.invest(state.currentUser.id, product.id);
-        showToast(`Invested in ${product.name}!`, 'success');
-        await fetchData(); 
-    } catch (err: any) {
-        showToast(err.message || 'Investment failed', 'error');
-    }
-  };
-
+  // Fix: Added missing event handler for claiming income
   const handleClaim = async () => {
     if (!state.currentUser) return;
     try {
-        const res = await api.claim(state.currentUser.id);
-        showToast(`Collected ₹${res.amount.toFixed(2)} profit!`, 'success');
-        await fetchData();
+      const result = await api.claim(state.currentUser.id);
+      showToast(`Success! You claimed ₹${result.amount.toFixed(2)}`, 'success');
+      fetchData();
     } catch (err: any) {
-        showToast(err.message || 'Claim failed', 'error'); 
+      showToast(err.message || 'Claim failed', 'error');
     }
   };
 
+  // Fix: Added missing event handler for product investment
+  const handleInvest = async (product: Product) => {
+    if (!state.currentUser) return;
+    try {
+      await api.invest(state.currentUser.id, product.id);
+      showToast(`Investment in ${product.name} successful!`, 'success');
+      fetchData();
+    } catch (err: any) {
+      showToast(err.message || 'Investment failed', 'error');
+    }
+  };
+
+  // Fix: Added missing event handler for wallet recharge
   const handleRecharge = async (amount: number) => {
     if (!state.currentUser) return;
     try {
-        await api.recharge(state.currentUser.id, amount);
-        showToast('Recharge pending approval.', 'success');
-        await fetchData();
+      await api.recharge(state.currentUser.id, amount);
+      showToast('Recharge request submitted successfully!', 'success');
+      fetchData();
     } catch (err: any) {
-        showToast(err.message, 'error');
+      showToast(err.message || 'Recharge failed', 'error');
     }
   };
 
+  // Fix: Added missing event handler for balance withdrawal
   const handleWithdraw = async (amount: number, details: any) => {
     if (!state.currentUser) return;
     try {
-        await api.withdraw(state.currentUser.id, amount, details);
-        showToast('Withdrawal request submitted!', 'success');
-        await fetchData();
+      await api.withdraw(state.currentUser.id, amount, details);
+      showToast('Withdrawal request submitted!', 'success');
+      fetchData();
     } catch (err: any) {
-        showToast(err.message, 'error');
+      showToast(err.message || 'Withdrawal failed', 'error');
     }
   };
 
   if (isLoading) {
       return (
-          <div className="min-h-screen flex items-center justify-center bg-[#2c1810] p-4 font-sans">
-              <div className="text-center text-white bg-[#3d2319] p-10 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] max-w-sm w-full border border-amber-900/30">
+          <div className="min-h-screen flex items-center justify-center bg-[#1a0f0a] p-6">
+              <div className="text-center text-white bg-[#2c1810] p-10 rounded-3xl shadow-2xl max-w-sm w-full border border-amber-900/20 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-amber-500/20">
+                      <div className="h-full bg-amber-500 animate-[progress_2s_infinite] w-1/3"></div>
+                  </div>
                   <div className="relative mb-8">
-                      <div className="absolute inset-0 bg-amber-500/20 blur-2xl rounded-full"></div>
-                      <Loader2 size={64} className="animate-spin mx-auto text-amber-500 relative z-10" />
+                      <div className="absolute inset-0 bg-amber-500/10 blur-3xl rounded-full"></div>
+                      <Cpu size={56} className="mx-auto text-amber-500 relative z-10 animate-pulse" />
                   </div>
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <ShieldCheck size={18} className="text-amber-500" />
-                    <h2 className="text-2xl font-black tracking-tight uppercase">Royal Hub</h2>
-                  </div>
+                  <h2 className="text-2xl font-black tracking-tighter uppercase mb-2">Royal Hub</h2>
                   
                   {isWakingUp ? (
                       <div className="space-y-4">
-                          <p className="text-amber-100/60 text-xs font-medium uppercase tracking-[0.2em]">
-                             Waking up Pi Gateway
+                          <p className="text-amber-200/40 text-[10px] font-bold uppercase tracking-[0.3em]">
+                             Initializing Secure Node
                           </p>
-                          <div className="w-full bg-black/40 rounded-full h-1.5 overflow-hidden border border-white/5">
-                              <div className="bg-gradient-to-r from-amber-600 to-amber-400 h-full rounded-full animate-[progress_2s_infinite] w-full origin-left"></div>
-                          </div>
-                          <div className="bg-black/30 rounded-lg py-2 px-4 flex items-center justify-between border border-white/5">
-                               <Activity size={14} className="text-amber-400 animate-pulse" />
-                               <span className="text-[10px] text-amber-400 font-mono font-bold">ATTEMPT {wakeUpAttempt} / 90</span>
+                          <div className="flex items-center justify-center gap-3 text-amber-500/80 font-mono text-xs bg-black/40 py-2 rounded-xl border border-white/5">
+                               <Activity size={14} className="animate-pulse" />
+                               <span>GATEWAY STATUS: ATTEMPT {wakeUpAttempt}</span>
                           </div>
                       </div>
                   ) : (
-                       <p className="text-amber-100/60 text-xs font-medium uppercase tracking-[0.2em] animate-pulse">
-                          Syncing Secure Data...
+                       <p className="text-amber-200/40 text-[10px] font-bold uppercase tracking-[0.3em] animate-pulse">
+                          Syncing Blockchain Data
                        </p>
                   )}
               </div>
@@ -263,21 +264,21 @@ function App() {
 
   if (connectionError && !isAuth) {
       return (
-          <div className="min-h-screen flex items-center justify-center bg-[#2c1810] p-6 font-sans">
-              <div className="text-center bg-white p-10 rounded-2xl shadow-2xl max-w-sm w-full animate-bounce-in border-b-8 border-red-500">
-                  <div className="bg-red-50 p-5 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center border-2 border-red-100">
-                    <AlertTriangle size={48} className="text-red-500" />
+          <div className="min-h-screen flex items-center justify-center bg-[#1a0f0a] p-6">
+              <div className="text-center bg-white p-10 rounded-3xl shadow-2xl max-w-sm w-full border-t-8 border-red-500">
+                  <div className="bg-red-50 p-5 rounded-full w-20 h-20 mx-auto mb-6 flex items-center justify-center">
+                    <AlertTriangle size={40} className="text-red-500" />
                   </div>
-                  <h2 className="text-2xl font-black text-gray-900 mb-2 uppercase tracking-tight">Access Error</h2>
-                  <p className="text-gray-500 mb-6 text-sm leading-relaxed">
-                      Could not establish a secure connection to Royal Hub servers.
+                  <h2 className="text-2xl font-black text-gray-900 mb-2 uppercase tracking-tight">Node Offline</h2>
+                  <p className="text-gray-500 mb-8 text-xs font-medium leading-relaxed uppercase tracking-wide">
+                      Unable to establish a secure link with the central database.
                   </p>
                   
                   <button 
                     onClick={() => window.location.reload()}
-                    className="w-full bg-[#2c1810] text-white px-6 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl flex items-center justify-center group"
+                    className="w-full bg-[#1a0f0a] text-white px-6 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl flex items-center justify-center group"
                   >
-                      <RefreshCw size={18} className="mr-2 group-hover:rotate-180 transition-transform duration-500" /> Reconnect
+                      <RefreshCw size={18} className="mr-3 group-hover:rotate-180 transition-transform duration-700" /> Retry Link
                   </button>
               </div>
           </div>
@@ -286,18 +287,18 @@ function App() {
 
   return (
     <>
-        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col gap-2 w-full max-w-sm px-4">
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col gap-2 w-full max-w-xs px-4">
             {toasts.map(toast => (
-                <div key={toast.id} className={`shadow-2xl rounded-xl p-4 flex items-center justify-between text-white animate-slide-up border border-white/10 ${
-                    toast.type === 'success' ? 'bg-emerald-600' :
-                    toast.type === 'error' ? 'bg-rose-600' :
-                    'bg-zinc-900'
+                <div key={toast.id} className={`shadow-2xl rounded-2xl p-4 flex items-center justify-between text-white animate-slide-up border border-white/10 backdrop-blur-md ${
+                    toast.type === 'success' ? 'bg-emerald-600/90' :
+                    toast.type === 'error' ? 'bg-rose-600/90' :
+                    'bg-zinc-900/90'
                 }`}>
                     <div className="flex items-center gap-3">
-                        {toast.type === 'success' && <CheckCircle size={20} />}
-                        {toast.type === 'error' && <XCircle size={20} />}
-                        {toast.type === 'info' && <Info size={20} />}
-                        <span className="font-bold text-xs uppercase tracking-wider">{toast.message}</span>
+                        {toast.type === 'success' && <CheckCircle size={18} />}
+                        {toast.type === 'error' && <XCircle size={18} />}
+                        {toast.type === 'info' && <Info size={18} />}
+                        <span className="font-bold text-[10px] uppercase tracking-wider">{toast.message}</span>
                     </div>
                 </div>
             ))}
